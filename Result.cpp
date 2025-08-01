@@ -42,6 +42,8 @@
 
 #include <iostream>
 #include <fstream>
+#include <algorithm>
+#include <cmath>
 
 using namespace std;
 
@@ -342,7 +344,7 @@ void Result::print() {
 		cout << " |--- Mat Latency    = " << TO_SECOND(bank->mat.resetLatency) << endl;
 		cout << "    |--- Predecoder Latency = " << TO_SECOND(bank->mat.predecoderLatency) << endl;
 		cout << "    |--- Subarray Latency   = " << TO_SECOND(bank->mat.subarray.resetLatency) << endl;
-		cout << "       |--- RESET Pulse Duration = " << TO_SECOND(cell->resetPulse) << endl;
+		cout << "       |--- RESET Pulse Duration = " << TO_SECOND(cell->sampleResetPulse()) << endl;
 		cout << "       |--- Row Decoder Latency  = " << TO_SECOND(bank->mat.subarray.rowDecoder.writeLatency) << endl;
 		cout << "       |--- Charge Latency   = " << TO_SECOND(bank->mat.subarray.chargeLatency) << endl;
 		cout << " - SET Latency   = " << TO_SECOND(bank->setLatency) << endl;
@@ -353,7 +355,7 @@ void Result::print() {
 		cout << " |--- Mat Latency    = " << TO_SECOND(bank->mat.setLatency) << endl;
 		cout << "    |--- Predecoder Latency = " << TO_SECOND(bank->mat.predecoderLatency) << endl;
 		cout << "    |--- Subarray Latency   = " << TO_SECOND(bank->mat.subarray.setLatency) << endl;
-		cout << "       |--- SET Pulse Duration   = " << TO_SECOND(cell->setPulse) << endl;
+		cout << "       |--- SET Pulse Duration   = " << TO_SECOND(cell->sampleSetPulse()) << endl;
 		cout << "       |--- Row Decoder Latency  = " << TO_SECOND(bank->mat.subarray.rowDecoder.writeLatency) << endl;
 		cout << "       |--- Charger Latency      = " << TO_SECOND(bank->mat.subarray.chargeLatency) << endl;
 	} else if (cell->memCellType == SLCNAND) {
@@ -378,8 +380,10 @@ void Result::print() {
 		cout << " |--- Mat Latency    = " << TO_SECOND(bank->mat.writeLatency) << endl;
 		cout << "    |--- Predecoder Latency = " << TO_SECOND(bank->mat.predecoderLatency) << endl;
 		cout << "    |--- Subarray Latency   = " << TO_SECOND(bank->mat.subarray.writeLatency) << endl;
-		if (cell->memCellType == MRAM)
-			cout << "       |--- Write Pulse Duration = " << TO_SECOND(cell->resetPulse) << endl;	// MRAM reset/set is equal
+		if (cell->memCellType == MRAM) {
+			double pulseDuration = cell->sampleResetPulse();
+			cout << "       |--- Write Pulse Duration = " << TO_SECOND(pulseDuration) << endl;	// MRAM reset/set is equal
+		}
 		cout << "       |--- Row Decoder Latency = " << TO_SECOND(bank->mat.subarray.rowDecoder.writeLatency) << endl;
 		cout << "       |--- Charge Latency      = " << TO_SECOND(bank->mat.subarray.chargeLatency) << endl;
 	}
@@ -874,4 +878,83 @@ void Result::printAsCacheToCsvFile(Result &tagResult, CacheAccessMode cacheAcces
 		tagResult.printToCsvFile(outputFile);
 		outputFile << endl;
 	}
+}
+
+/* Static member definitions for distribution analysis */
+std::vector<double> Result::writeLatencyHistory;
+std::vector<double> Result::setPulseHistory;
+std::vector<double> Result::resetPulseHistory;
+
+void Result::recordLatencies(double writeLatency, double setPulse, double resetPulse) {
+	writeLatencyHistory.push_back(writeLatency);
+	setPulseHistory.push_back(setPulse);
+	resetPulseHistory.push_back(resetPulse);
+}
+
+double calculateMean(const std::vector<double>& data) {
+	if (data.empty()) return 0.0;
+	double sum = 0.0;
+	for (double value : data) {
+		sum += value;
+	}
+	return sum / data.size();
+}
+
+double calculateStdDev(const std::vector<double>& data) {
+	if (data.size() < 2) return 0.0;
+	double mean = calculateMean(data);
+	double sumSquaredDiff = 0.0;
+	for (double value : data) {
+		double diff = value - mean;
+		sumSquaredDiff += diff * diff;
+	}
+	return sqrt(sumSquaredDiff / (data.size() - 1));
+}
+
+void Result::printLatencyStatistics() {
+	if (writeLatencyHistory.empty()) {
+		cout << "No latency data recorded for distribution analysis." << endl;
+		return;
+	}
+	
+	cout << "\n=== LATENCY DISTRIBUTION STATISTICS ===" << endl;
+	cout << "Samples: " << writeLatencyHistory.size() << endl;
+	
+	/* Write Latency Statistics */
+	double writeLatencyMean = calculateMean(writeLatencyHistory);
+	double writeLatencyStdDev = calculateStdDev(writeLatencyHistory);
+	double writeLatencyMin = *std::min_element(writeLatencyHistory.begin(), writeLatencyHistory.end());
+	double writeLatencyMax = *std::max_element(writeLatencyHistory.begin(), writeLatencyHistory.end());
+	
+	cout << "Write Latency:" << endl;
+	cout << "  Mean: " << TO_SECOND(writeLatencyMean) << endl;
+	cout << "  Std Dev: " << TO_SECOND(writeLatencyStdDev) << endl;
+	cout << "  Min: " << TO_SECOND(writeLatencyMin) << endl;
+	cout << "  Max: " << TO_SECOND(writeLatencyMax) << endl;
+	
+	/* SET Pulse Statistics */
+	if (!setPulseHistory.empty()) {
+		double setPulseMean = calculateMean(setPulseHistory);
+		double setPulseStdDev = calculateStdDev(setPulseHistory);
+		cout << "SET Pulse Duration:" << endl;
+		cout << "  Mean: " << TO_SECOND(setPulseMean) << endl;
+		cout << "  Std Dev: " << TO_SECOND(setPulseStdDev) << endl;
+	}
+	
+	/* RESET Pulse Statistics */
+	if (!resetPulseHistory.empty()) {
+		double resetPulseMean = calculateMean(resetPulseHistory);
+		double resetPulseStdDev = calculateStdDev(resetPulseHistory);
+		cout << "RESET Pulse Duration:" << endl;
+		cout << "  Mean: " << TO_SECOND(resetPulseMean) << endl;
+		cout << "  Std Dev: " << TO_SECOND(resetPulseStdDev) << endl;
+	}
+	
+	cout << "==========================================\n" << endl;
+}
+
+void Result::clearStatistics() {
+	writeLatencyHistory.clear();
+	setPulseHistory.clear();
+	resetPulseHistory.clear();
 }

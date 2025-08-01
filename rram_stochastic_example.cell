@@ -1,0 +1,32 @@
+-MemCellType: MRAM
+-CellArea (F^2): 54
+-CellAspectRatio: 0.54
+-ResistanceOn (ohm): 3000
+-ResistanceOff (ohm): 6000
+-ReadMode: current
+-ReadVoltage (V): 0.25
+-MinSenseVoltage (mV): 25
+-ReadPower (uW): 30
+-ResetMode: current
+-ResetCurrent (uA): 80
+-ResetPulse (ns): 10
+-ResetEnergy (pJ): 1
+-SetMode: current
+-SetCurrent (uA): 80
+-SetPulse (ns): 10
+-SetEnergy (pJ): 1
+-AccessType: CMOS
+-VoltageDropAccessDevice (V): 0.15
+-AccessCMOSWidth (F): 8
+
+-SetPulseDistribution: normal
+-SetPulseMean (ns): 50
+-SetPulseStdDev (ns): 10
+-SetPulseMin (ns): 30
+-SetPulseMax (ns): 80
+
+-ResetPulseDistribution: normal
+-ResetPulseMean (ns): 60
+-ResetPulseStdDev (ns): 15
+-ResetPulseMin (ns): 40
+-ResetPulseMax (ns): 100

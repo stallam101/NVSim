@@ -129,6 +129,10 @@ public:
 	int maxIsLocalWireLowSwing;		/* This one is actually boolean */
 	int minIsGlobalWireLowSwing;		/* This one is actually boolean */
 	int maxIsGlobalWireLowSwing;		/* This one is actually boolean */
+
+	/* Distribution analysis parameters */
+	bool distributionAnalysis;			/* Enable multi-run distribution analysis */
+	int distributionSamples;			/* Number of samples for distribution analysis */
 };
 
 #endif /* INPUTPARAMETER_H_ */
