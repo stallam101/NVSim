@@ -114,10 +114,6 @@ InputParameter::InputParameter() {
 	flashBlockSize = 0;
 
 	outputFilePrefix = "output";	/* Default output file name */
-
-	/* Distribution analysis defaults */
-	distributionAnalysis = false;	/* Default: single run mode */
-	distributionSamples = 100;		/* Default: 100 samples when enabled */
 }
 
 InputParameter::~InputParameter() {
@@ -559,24 +555,6 @@ void InputParameter::ReadInputParameterFromFile(const std::string & inputFile) {
 		if (!strncmp("-ApplyWriteEdpConstraint", line, strlen("-ApplyWriteEdpConstraint"))) {
 			sscanf(line, "-ApplyWriteEdpConstraint: %lf", &writeEdpConstraint);
 			isConstraintApplied = true;
-			continue;
-		}
-
-		/* Parse distribution analysis parameters */
-		if (!strncmp("-DistributionAnalysis", line, strlen("-DistributionAnalysis"))) {
-			sscanf(line, "-DistributionAnalysis: %s", tmp);
-			if (!strcmp(tmp, "true") || !strcmp(tmp, "1"))
-				distributionAnalysis = true;
-			else
-				distributionAnalysis = false;
-			continue;
-		}
-		if (!strncmp("-DistributionSamples", line, strlen("-DistributionSamples"))) {
-			sscanf(line, "-DistributionSamples: %d", &distributionSamples);
-			if (distributionSamples <= 0) {
-				cout << "Warning: Invalid number of distribution samples, defaulting to 100." << endl;
-				distributionSamples = 100;
-			}
 			continue;
 		}
 	}

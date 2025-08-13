@@ -441,38 +441,6 @@ int main(int argc, char *argv[])
 
 	if (inputParameter->optimizationTarget != full_exploration) {
 		if (numSolution > 0) {
-			if (inputParameter->distributionAnalysis) {
-				cout << "Running distribution analysis with " << inputParameter->distributionSamples << " samples..." << endl;
-				
-				for (int sample = 0; sample < inputParameter->distributionSamples; sample++) {
-					double writeLatency = 0;
-					double setPulse = 0;
-					double resetPulse = 0;
-					
-					if (bestDataResults[inputParameter->optimizationTarget].bank) {
-						double baseLatency = bestDataResults[inputParameter->optimizationTarget].bank->writeLatency;
-						setPulse = cell->sampleSetPulse();
-						resetPulse = cell->sampleResetPulse();
-						
-						// For MRAM, total write latency includes the stochastic pulse duration
-						if (cell->memCellType == MRAM) {
-							// Use the maximum of SET and RESET pulse durations (typical MRAM behavior)
-							double maxPulse = (setPulse > resetPulse) ? setPulse : resetPulse;
-							writeLatency = baseLatency + maxPulse;
-						} else {
-							writeLatency = baseLatency;
-						}
-					}
-					
-					Result::recordLatencies(writeLatency, setPulse, resetPulse);
-					
-					if ((sample + 1) % (inputParameter->distributionSamples / 10) == 0) {
-						cout << "  Progress: " << ((sample + 1) * 100 / inputParameter->distributionSamples) << "%" << endl;
-					}
-				}
-				cout << "Distribution analysis completed." << endl;
-			}
-			
 			if (inputParameter->designTarget == cache)
 				bestDataResults[inputParameter->optimizationTarget].printAsCache(bestTagResults[inputParameter->optimizationTarget], inputParameter->cacheAccessMode);
 			else
@@ -491,11 +459,6 @@ int main(int argc, char *argv[])
 				solutionMultiplier = 8;
 			cout << numSolution * solutionMultiplier << " solutions in total" << endl;
 		}
-	}
-
-	/* Print distribution statistics if enabled */
-	if (inputParameter->distributionAnalysis) {
-		Result::printLatencyStatistics();
 	}
 
 	if (outputFile.is_open())

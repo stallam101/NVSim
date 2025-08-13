@@ -41,7 +41,6 @@
 #include "BankWithHtree.h"
 #include "BankWithoutHtree.h"
 #include "Wire.h"
-#include <vector>
 
 class Result {
 public:
@@ -55,11 +54,6 @@ public:
 	void printToCsvFile(ofstream &outputFile);
 	void printAsCacheToCsvFile(Result &tagBank, CacheAccessMode cacheAccessMode, ofstream &outputFile);
 	void compareAndUpdate(Result &newResult);
-
-	/* Static methods for distribution analysis */
-	static void recordLatencies(double writeLatency, double setPulse, double resetPulse);
-	static void printLatencyStatistics();
-	static void clearStatistics();
 
 	OptimizationTarget optimizationTarget;	/* Exploration should not be assigned here */
 
@@ -75,11 +69,6 @@ public:
 	double limitWriteEdp;				/* The maximum allowable write EDP, Unit: s-J */
 	double limitArea;					/* The maximum allowable area, Unit: m^2 */
 	double limitLeakage;				/* The maximum allowable leakage power, Unit: W */
-
-	/* Static members for distribution analysis */
-	static std::vector<double> writeLatencyHistory;
-	static std::vector<double> setPulseHistory;
-	static std::vector<double> resetPulseHistory;
 };
 
 #endif /* RESULT_H_ */

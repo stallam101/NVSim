@@ -596,15 +596,15 @@ void SubArray::CalculateLatency(double _rampInput) {
 					/*TO-DO: write and verify programming */
 				} else {
 					writeLatency = MAX(rowDecoder.writeLatency, columnDecoderLatency + chargeLatency);	/* TO-DO: why not directly use precharger latency? */
-					resetLatency = writeLatency + cell->sampleResetPulse();
-					setLatency = writeLatency + cell->sampleSetPulse();
-					writeLatency += MAX(cell->sampleResetPulse(), cell->sampleSetPulse());
+					resetLatency = writeLatency + cell->resetPulse;
+					setLatency = writeLatency + cell->setPulse;
+					writeLatency += MAX(cell->resetPulse, cell->setPulse);
 				}
 			} else if (cell->memCellType == FBRAM) {
 				writeLatency = MAX(rowDecoder.writeLatency, columnDecoderLatency + chargeLatency);
-				resetLatency = writeLatency + cell->sampleResetPulse();
-				setLatency = writeLatency + cell->sampleSetPulse();
-				writeLatency += MAX(cell->sampleResetPulse(), cell->sampleSetPulse());
+				resetLatency = writeLatency + cell->resetPulse;
+				setLatency = writeLatency + cell->setPulse;
+				writeLatency += MAX(cell->resetPulse, cell->setPulse);
 			} else { //memristor and MRAM
 				if (cell->accessType == diode_access || cell->accessType == none_access) {
 					if (inputParameter->writeScheme == erase_before_reset || inputParameter->writeScheme == erase_before_set)
@@ -612,12 +612,12 @@ void SubArray::CalculateLatency(double _rampInput) {
 					else
 						writeLatency = MAX(rowDecoder.writeLatency, columnDecoderLatency + chargeLatency);
 					writeLatency += chargeLatency;
-					writeLatency += cell->sampleResetPulse() + cell->sampleSetPulse();
+					writeLatency += cell->resetPulse + cell->setPulse;
 				} else { // CMOS or Bipolar access
 					writeLatency = MAX(rowDecoder.writeLatency, columnDecoderLatency + chargeLatency);
-					resetLatency = writeLatency + cell->sampleResetPulse();
-					setLatency = writeLatency + cell->sampleSetPulse();
-					writeLatency += MAX(cell->sampleResetPulse(), cell->sampleSetPulse());
+					resetLatency = writeLatency + cell->resetPulse;
+					setLatency = writeLatency + cell->setPulse;
+					writeLatency += MAX(cell->resetPulse, cell->setPulse);
 				}
 			}
 		} else if (cell->memCellType == SLCNAND) {

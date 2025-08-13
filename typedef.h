@@ -147,10 +147,4 @@ enum CacheAccessMode
 	fast_access_mode		/* data and tag access happen in parallel */
 };
 
-enum DistributionType
-{
-	DIST_CONSTANT,		/* Default - uses existing constant pulse values */
-	DIST_NORMAL			/* Normal distribution for stochastic pulse timing */
-};
-
 #endif /* TYPEDEF_H_ */

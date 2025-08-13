@@ -42,7 +42,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <random>
 
 #include "typedef.h"
 
@@ -60,18 +59,7 @@ public:
 	void CalculateWriteEnergy();
 	double CalculateReadPower();
 	void PrintCell();
-	
-	/* Stochastic pulse timing methods */
-	double sampleSetPulse() const;
-	double sampleResetPulse() const;
-	void setSeed(unsigned int seed);
 
-private:
-	/* Helper methods for stochastic timing */
-	void initializeRNG() const;
-	double sampleNormalDistribution(double mean, double stddev, double minVal, double maxVal) const;
-
-public:
 	/* Properties */
 	MemCellType memCellType;	/* Memory cell type (like MRAM, PCRAM, etc.) */
 	int processNode;        /* Cell original process technology node, Unit: nm*/
@@ -123,22 +111,6 @@ public:
 	double resistanceOnAtHalfReadVoltage; /* Low resistance state when 1/2 read voltage is applied */
 	double resistanceOffAtHalfReadVoltage; /* High resistance state when 1/2 read voltage is applied */
 	double resistanceOnAtHalfResetVoltage; /* Low resistance state when 1/2 reset voltage is applied */
-
-	/* For stochastic pulse timing */
-	DistributionType setPulseDistType;		/* Distribution type for SET pulse */
-	double setPulseMean;					/* Mean for SET pulse distribution (s) */
-	double setPulseStdDev;					/* Standard deviation for SET pulse distribution (s) */
-	double setPulseMin;						/* Optional minimum bound for SET pulse (s) */
-	double setPulseMax;						/* Optional maximum bound for SET pulse (s) */
-	
-	DistributionType resetPulseDistType;	/* Distribution type for RESET pulse */
-	double resetPulseMean;					/* Mean for RESET pulse distribution (s) */
-	double resetPulseStdDev;				/* Standard deviation for RESET pulse distribution (s) */
-	double resetPulseMin;					/* Optional minimum bound for RESET pulse (s) */
-	double resetPulseMax;					/* Optional maximum bound for RESET pulse (s) */
-	
-	mutable std::mt19937 rng;				/* Random number generator */
-	mutable bool rngInitialized;			/* Flag to track RNG initialization */
 
 	/* For NAND flash */
 	double flashEraseVoltage;		/* The erase voltage, Unit: V, highest W/E voltage in ITRS sheet */

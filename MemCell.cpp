@@ -40,7 +40,6 @@
 #include "global.h"
 #include "macros.h"
 #include <math.h>
-#include <chrono>
 
 MemCell::MemCell() {
 	// TODO Auto-generated constructor stub
@@ -89,19 +88,6 @@ MemCell::MemCell() {
 	resistanceOffAtReadVoltage = 0;
 	resistanceOnAtHalfReadVoltage = 0;
 	resistanceOffAtHalfReadVoltage = 0;
-
-	/* For stochastic pulse timing */
-	setPulseDistType = DIST_CONSTANT;
-	setPulseMean = 0;
-	setPulseStdDev = 0;
-	setPulseMin = 0;
-	setPulseMax = 0;
-	resetPulseDistType = DIST_CONSTANT;
-	resetPulseMean = 0;
-	resetPulseStdDev = 0;
-	resetPulseMin = 0;
-	resetPulseMax = 0;
-	rngInitialized = false;
 }
 
 MemCell::~MemCell() {
@@ -277,42 +263,6 @@ void MemCell::ReadCellFromFile(const string & inputFile)
 			sscanf(line, "-ResetVoltage (V): %lf", &resetVoltage);
 			continue;
 		}
-
-		/* Parse stochastic RESET pulse timing parameters - MUST come before regular pulse parsing */
-		if (!strncmp("-ResetPulseDistribution", line, strlen("-ResetPulseDistribution"))) {
-			sscanf(line, "-ResetPulseDistribution: %s", tmp);
-			if (!strcmp(tmp, "normal")) {
-				resetPulseDistType = DIST_NORMAL;
-				cout << "Stochastic RESET pulse timing enabled (normal distribution)" << endl;
-			} else if (!strcmp(tmp, "constant")) {
-				resetPulseDistType = DIST_CONSTANT;
-			} else {
-				cout << "Warning: Unknown distribution type '" << tmp << "' for RESET pulse, defaulting to constant." << endl;
-				resetPulseDistType = DIST_CONSTANT;
-			}
-			continue;
-		}
-		if (!strncmp("-ResetPulseMean", line, strlen("-ResetPulseMean"))) {
-			sscanf(line, "-ResetPulseMean (ns): %lf", &resetPulseMean);
-			resetPulseMean /= 1e9;  // convert from ns to seconds
-			continue;
-		}
-		if (!strncmp("-ResetPulseStdDev", line, strlen("-ResetPulseStdDev"))) {
-			sscanf(line, "-ResetPulseStdDev (ns): %lf", &resetPulseStdDev);
-			resetPulseStdDev /= 1e9;  // convert from ns to seconds
-			continue;
-		}
-		if (!strncmp("-ResetPulseMin", line, strlen("-ResetPulseMin"))) {
-			sscanf(line, "-ResetPulseMin (ns): %lf", &resetPulseMin);
-			resetPulseMin /= 1e9;  // convert from ns to seconds
-			continue;
-		}
-		if (!strncmp("-ResetPulseMax", line, strlen("-ResetPulseMax"))) {
-			sscanf(line, "-ResetPulseMax (ns): %lf", &resetPulseMax);
-			resetPulseMax /= 1e9;  // convert from ns to seconds
-			continue;
-		}
-
 		if (!strncmp("-ResetPulse", line, strlen("-ResetPulse"))) {
 			sscanf(line, "-ResetPulse (ns): %lf", &resetPulse);
 			resetPulse /= 1e9;
@@ -345,43 +295,6 @@ void MemCell::ReadCellFromFile(const string & inputFile)
 			sscanf(line, "-SetVoltage (V): %lf", &setVoltage);
 			continue;
 		}
-
-		/* Parse stochastic pulse timing parameters - MUST come before regular pulse parsing */
-		if (!strncmp("-SetPulseDistribution", line, strlen("-SetPulseDistribution"))) {
-			sscanf(line, "-SetPulseDistribution: %s", tmp);
-			if (!strcmp(tmp, "normal")) {
-				setPulseDistType = DIST_NORMAL;
-				cout << "Stochastic SET pulse timing enabled (normal distribution)" << endl;
-			} else if (!strcmp(tmp, "constant")) {
-				setPulseDistType = DIST_CONSTANT;
-			} else {
-				cout << "Warning: Unknown distribution type '" << tmp << "' for SET pulse, defaulting to constant." << endl;
-				setPulseDistType = DIST_CONSTANT;
-			}
-			continue;
-		}
-		if (!strncmp("-SetPulseMean", line, strlen("-SetPulseMean"))) {
-			double rawValue = 0.0;
-			sscanf(line, "-SetPulseMean (ns): %lf", &rawValue);
-			setPulseMean = rawValue / 1e9;  // convert from ns to seconds
-			continue;
-		}
-		if (!strncmp("-SetPulseStdDev", line, strlen("-SetPulseStdDev"))) {
-			sscanf(line, "-SetPulseStdDev (ns): %lf", &setPulseStdDev);
-			setPulseStdDev /= 1e9;  // convert from ns to seconds
-			continue;
-		}
-		if (!strncmp("-SetPulseMin", line, strlen("-SetPulseMin"))) {
-			sscanf(line, "-SetPulseMin (ns): %lf", &setPulseMin);
-			setPulseMin /= 1e9;  // convert from ns to seconds
-			continue;
-		}
-		if (!strncmp("-SetPulseMax", line, strlen("-SetPulseMax"))) {
-			sscanf(line, "-SetPulseMax (ns): %lf", &setPulseMax);
-			setPulseMax /= 1e9;  // convert from ns to seconds
-			continue;
-		}
-
 		if (!strncmp("-SetPulse", line, strlen("-SetPulse"))) {
 			sscanf(line, "-SetPulse (ns): %lf", &setPulse);
 			setPulse /= 1e9;
@@ -784,76 +697,4 @@ void MemCell::PrintCell()
 		cout << "Erase Time         : " << TO_SECOND(flashEraseTime) << endl;
 		cout << "Gate Coupling Ratio: " << gateCouplingRatio << endl;
 	}
-}
-
-void MemCell::initializeRNG() const {
-	if (!rngInitialized) {
-		// Use time-based seed for randomness, but allow for reproducibility if needed
-		static unsigned int globalSeed = std::chrono::steady_clock::now().time_since_epoch().count();
-		rng.seed(globalSeed++);  // increment for each cell instance
-		rngInitialized = true;
-	}
-}
-
-double MemCell::sampleNormalDistribution(double mean, double stddev, double minVal, double maxVal) const {
-	if (!rngInitialized) {
-		initializeRNG();
-	}
-	
-	if (stddev <= 0) {
-		cout << "Warning: Invalid standard deviation for normal distribution, returning mean value." << endl;
-		return mean;
-	}
-	
-	std::normal_distribution<double> dist(mean, stddev);
-	double sample = dist(rng);
-	
-	// Apply bounds if specified
-	if (minVal > 0 && sample < minVal) sample = minVal;
-	if (maxVal > 0 && sample > maxVal) sample = maxVal;
-	
-	return sample;
-}
-
-double MemCell::sampleSetPulse() const {
-	switch(setPulseDistType) {
-		case DIST_CONSTANT:
-			return setPulse;  // use existing constant value
-		case DIST_NORMAL:
-			if (setPulseMean <= 0 || setPulseStdDev < 0) {
-				cout << "Warning: Invalid SET pulse parameters (mean=" << setPulseMean << ", stddev=" << setPulseStdDev << "), using constant value." << endl;
-				return setPulse;
-			}
-			if (setPulseStdDev == 0) {
-				// Zero stddev means constant value at the mean
-				return setPulseMean;
-			}
-			return sampleNormalDistribution(setPulseMean, setPulseStdDev, setPulseMin, setPulseMax);
-		default:
-			return setPulse;  // fallback to constant
-	}
-}
-
-double MemCell::sampleResetPulse() const {
-	switch(resetPulseDistType) {
-		case DIST_CONSTANT:
-			return resetPulse;  // use existing constant value
-		case DIST_NORMAL:
-			if (resetPulseMean <= 0 || resetPulseStdDev < 0) {
-				cout << "Warning: Invalid RESET pulse parameters for normal distribution, using constant value." << endl;
-				return resetPulse;
-			}
-			if (resetPulseStdDev == 0) {
-				// Zero stddev means constant value at the mean
-				return resetPulseMean;
-			}
-			return sampleNormalDistribution(resetPulseMean, resetPulseStdDev, resetPulseMin, resetPulseMax);
-		default:
-			return resetPulse;  // fallback to constant
-	}
-}
-
-void MemCell::setSeed(unsigned int seed) {
-	rng.seed(seed);
-	rngInitialized = true;
 }
