@@ -40,6 +40,40 @@
 #include "global.h"
 #include "macros.h"
 #include <math.h>
+#include <random>
+#include <vector>
+
+/* Static random number generation infrastructure for stochastic sampling */
+static std::random_device rd;
+static std::mt19937 gen(rd());
+static bool randomSeedSet = false;
+
+/* Function to set seed for reproducible results */
+static void SetRandomSeed(unsigned int seed) {
+	gen.seed(seed);
+	randomSeedSet = true;
+}
+
+/* Function to sample from truncated normal distribution */
+static int SampleTruncatedNormal(double mean, double stddev, int minVal, int maxVal) {
+	std::normal_distribution<double> distribution(mean, stddev);
+	int sample;
+	int attempts = 0;
+	const int maxAttempts = 100; /* Prevent infinite loops */
+	
+	do {
+		sample = (int)round(distribution(gen));
+		attempts++;
+		if (attempts >= maxAttempts) {
+			/* Fallback to bounds if distribution is too extreme */
+			sample = (sample < minVal) ? minVal : sample;
+			sample = (sample > maxVal) ? maxVal : sample;
+			break;
+		}
+	} while (sample < minVal || sample > maxVal);
+	
+	return sample;
+}
 
 MemCell::MemCell() {
 	// TODO Auto-generated constructor stub
@@ -278,7 +312,7 @@ void MemCell::ReadCellFromFile(const string & inputFile)
 			sscanf(line, "-ResetVoltage (V): %lf", &resetVoltage);
 			continue;
 		}
-		if (!strncmp("-ResetPulse", line, strlen("-ResetPulse"))) {
+		if (!strncmp("-ResetPulse (ns):", line, strlen("-ResetPulse (ns):"))) {
 			sscanf(line, "-ResetPulse (ns): %lf", &resetPulse);
 			resetPulse /= 1e9;
 			continue;
@@ -310,7 +344,7 @@ void MemCell::ReadCellFromFile(const string & inputFile)
 			sscanf(line, "-SetVoltage (V): %lf", &setVoltage);
 			continue;
 		}
-		if (!strncmp("-SetPulse", line, strlen("-SetPulse"))) {
+		if (!strncmp("-SetPulse (ns):", line, strlen("-SetPulse (ns):"))) {
 			sscanf(line, "-SetPulse (ns): %lf", &setPulse);
 			setPulse /= 1e9;
 			continue;
@@ -437,6 +471,72 @@ void MemCell::ReadCellFromFile(const string & inputFile)
 			else {
 				sscanf(line, "-GateCouplingRatio: %lf", &gateCouplingRatio);
 			}
+			continue;
+		}
+
+		/* Stochastic modeling parameters */
+		if (!strncmp("-StochasticEnabled", line, strlen("-StochasticEnabled"))) {
+			char tmpStr[256];
+			sscanf(line, "-StochasticEnabled: %s", tmpStr);
+			if (!strcmp(tmpStr, "true") || !strcmp(tmpStr, "TRUE") || !strcmp(tmpStr, "1")) {
+				stochasticEnabled = true;
+			} else {
+				stochasticEnabled = false;
+			}
+			continue;
+		}
+
+		/* SET transition (0→1) distribution parameters */
+		if (!strncmp("-SetPulseCountMean", line, strlen("-SetPulseCountMean"))) {
+			sscanf(line, "-SetPulseCountMean: %lf", &setPulseCountMean);
+			continue;
+		}
+		if (!strncmp("-SetPulseCountStdDev", line, strlen("-SetPulseCountStdDev"))) {
+			sscanf(line, "-SetPulseCountStdDev: %lf", &setPulseCountStdDev);
+			continue;
+		}
+		if (!strncmp("-SetPulseCountMin", line, strlen("-SetPulseCountMin"))) {
+			sscanf(line, "-SetPulseCountMin: %d", &setPulseCountMin);
+			continue;
+		}
+		if (!strncmp("-SetPulseCountMax", line, strlen("-SetPulseCountMax"))) {
+			sscanf(line, "-SetPulseCountMax: %d", &setPulseCountMax);
+			continue;
+		}
+
+		/* RESET transition (1→0) distribution parameters */
+		if (!strncmp("-ResetPulseCountMean", line, strlen("-ResetPulseCountMean"))) {
+			sscanf(line, "-ResetPulseCountMean: %lf", &resetPulseCountMean);
+			continue;
+		}
+		if (!strncmp("-ResetPulseCountStdDev", line, strlen("-ResetPulseCountStdDev"))) {
+			sscanf(line, "-ResetPulseCountStdDev: %lf", &resetPulseCountStdDev);
+			continue;
+		}
+		if (!strncmp("-ResetPulseCountMin", line, strlen("-ResetPulseCountMin"))) {
+			sscanf(line, "-ResetPulseCountMin: %d", &resetPulseCountMin);
+			continue;
+		}
+		if (!strncmp("-ResetPulseCountMax", line, strlen("-ResetPulseCountMax"))) {
+			sscanf(line, "-ResetPulseCountMax: %d", &resetPulseCountMax);
+			continue;
+		}
+
+		/* Redundant operation distribution parameters */
+		if (!strncmp("-RedundantPulseCountMean", line, strlen("-RedundantPulseCountMean"))) {
+			sscanf(line, "-RedundantPulseCountMean: %lf", &redundantPulseCountMean);
+			continue;
+		}
+		if (!strncmp("-RedundantPulseCountStdDev", line, strlen("-RedundantPulseCountStdDev"))) {
+			sscanf(line, "-RedundantPulseCountStdDev: %lf", &redundantPulseCountStdDev);
+			continue;
+		}
+		if (!strncmp("-RedundantPulseCountMin", line, strlen("-RedundantPulseCountMin"))) {
+			sscanf(line, "-RedundantPulseCountMin: %d", &redundantPulseCountMin);
+			continue;
+		}
+		if (!strncmp("-RedundantPulseCountMax", line, strlen("-RedundantPulseCountMax"))) {
+			sscanf(line, "-RedundantPulseCountMax: %d", &redundantPulseCountMax);
 			continue;
 		}
 	}
@@ -734,34 +834,25 @@ int MemCell::SamplePulseCount(TransitionType transitionType) {
 		return 1;
 	}
 	
-	/* For now, return mean values (will implement proper sampling later) */
+	/* Sample from appropriate distribution based on transition type */
 	int pulseCount;
 	switch (transitionType) {
 		case SET:
-			pulseCount = (int)round(setPulseCountMean);
+			pulseCount = SampleTruncatedNormal(setPulseCountMean, setPulseCountStdDev, 
+											   setPulseCountMin, setPulseCountMax);
 			break;
 		case RESET:
-			pulseCount = (int)round(resetPulseCountMean);
+			pulseCount = SampleTruncatedNormal(resetPulseCountMean, resetPulseCountStdDev,
+											   resetPulseCountMin, resetPulseCountMax);
 			break;
 		case REDUNDANT_SET:
 		case REDUNDANT_RESET:
-			pulseCount = (int)round(redundantPulseCountMean);
+			pulseCount = SampleTruncatedNormal(redundantPulseCountMean, redundantPulseCountStdDev,
+											   redundantPulseCountMin, redundantPulseCountMax);
 			break;
 		default:
 			pulseCount = 1;
 			break;
-	}
-	
-	/* Apply bounds checking */
-	if (transitionType == SET) {
-		pulseCount = (pulseCount < setPulseCountMin) ? setPulseCountMin : pulseCount;
-		pulseCount = (pulseCount > setPulseCountMax) ? setPulseCountMax : pulseCount;
-	} else if (transitionType == RESET) {
-		pulseCount = (pulseCount < resetPulseCountMin) ? resetPulseCountMin : pulseCount;
-		pulseCount = (pulseCount > resetPulseCountMax) ? resetPulseCountMax : pulseCount;
-	} else {
-		pulseCount = (pulseCount < redundantPulseCountMin) ? redundantPulseCountMin : pulseCount;
-		pulseCount = (pulseCount > redundantPulseCountMax) ? redundantPulseCountMax : pulseCount;
 	}
 	
 	return pulseCount;
@@ -778,4 +869,117 @@ double MemCell::CalculateMultiPulseLatency(TransitionType transitionType, int pu
 	}
 	
 	return pulseCount * singlePulseDuration;
+}
+
+/* Statistical validation functions */
+
+void MemCell::ValidateDistributionSampling(TransitionType type, int sampleCount) {
+	if (!stochasticEnabled) {
+		cout << "Stochastic sampling validation skipped - stochastic mode disabled" << endl;
+		return;
+	}
+	
+	cout << "\n=== Validating Distribution Sampling for ";
+	switch(type) {
+		case SET: cout << "SET"; break;
+		case RESET: cout << "RESET"; break;
+		case REDUNDANT_SET: 
+		case REDUNDANT_RESET: cout << "REDUNDANT"; break;
+	}
+	cout << " transition ===" << endl;
+	
+	/* Generate samples */
+	std::vector<int> samples;
+	double sum = 0.0;
+	int minSample = 1000, maxSample = 0;
+	
+	for (int i = 0; i < sampleCount; i++) {
+		int sample = SamplePulseCount(type);
+		samples.push_back(sample);
+		sum += sample;
+		minSample = (sample < minSample) ? sample : minSample;
+		maxSample = (sample > maxSample) ? sample : maxSample;
+	}
+	
+	/* Calculate statistics */
+	double sampleMean = sum / sampleCount;
+	double sumSquaredDiff = 0.0;
+	for (int sample : samples) {
+		double diff = sample - sampleMean;
+		sumSquaredDiff += diff * diff;
+	}
+	double sampleStdDev = sqrt(sumSquaredDiff / (sampleCount - 1));
+	
+	/* Get expected values */
+	double expectedMean, expectedStdDev;
+	int expectedMin, expectedMax;
+	switch(type) {
+		case SET:
+			expectedMean = setPulseCountMean;
+			expectedStdDev = setPulseCountStdDev;
+			expectedMin = setPulseCountMin;
+			expectedMax = setPulseCountMax;
+			break;
+		case RESET:
+			expectedMean = resetPulseCountMean;
+			expectedStdDev = resetPulseCountStdDev;
+			expectedMin = resetPulseCountMin;
+			expectedMax = resetPulseCountMax;
+			break;
+		case REDUNDANT_SET:
+		case REDUNDANT_RESET:
+			expectedMean = redundantPulseCountMean;
+			expectedStdDev = redundantPulseCountStdDev;
+			expectedMin = redundantPulseCountMin;
+			expectedMax = redundantPulseCountMax;
+			break;
+		default:
+			cout << "Unknown transition type" << endl;
+			return;
+	}
+	
+	/* Print results */
+	printf("Samples: %d\n", sampleCount);
+	printf("Expected Mean: %.2f, Actual Mean: %.2f (Error: %.1f%%)\n", 
+		   expectedMean, sampleMean, fabs(sampleMean - expectedMean) / expectedMean * 100);
+	printf("Expected StdDev: %.2f, Actual StdDev: %.2f (Error: %.1f%%)\n",
+		   expectedStdDev, sampleStdDev, fabs(sampleStdDev - expectedStdDev) / expectedStdDev * 100);
+	printf("Expected Range: [%d, %d], Actual Range: [%d, %d]\n",
+		   expectedMin, expectedMax, minSample, maxSample);
+	
+	/* Validation checks */
+	double meanError = fabs(sampleMean - expectedMean) / expectedMean * 100;
+	double stddevError = fabs(sampleStdDev - expectedStdDev) / expectedStdDev * 100;
+	bool meanOK = meanError < 5.0;  // Within 5%
+	bool stddevOK = stddevError < 15.0;  // Within 15% (std dev has more variance)
+	bool boundsOK = (minSample >= expectedMin) && (maxSample <= expectedMax);
+	
+	cout << "Validation Results:" << endl;
+	cout << "  Mean: " << (meanOK ? "PASS" : "FAIL") << endl;
+	cout << "  StdDev: " << (stddevOK ? "PASS" : "FAIL") << endl;
+	cout << "  Bounds: " << (boundsOK ? "PASS" : "FAIL") << endl;
+	cout << "  Overall: " << ((meanOK && stddevOK && boundsOK) ? "PASS" : "FAIL") << endl;
+}
+
+void MemCell::PrintStochasticParameters() {
+	cout << "\n=== Stochastic Parameters ===" << endl;
+	cout << "Stochastic Enabled: " << (stochasticEnabled ? "true" : "false") << endl;
+	
+	if (stochasticEnabled) {
+		cout << "\nSET Transition (0→1):" << endl;
+		printf("  Mean: %.2f pulses, StdDev: %.2f, Range: [%d, %d]\n",
+			   setPulseCountMean, setPulseCountStdDev, setPulseCountMin, setPulseCountMax);
+		
+		cout << "RESET Transition (1→0):" << endl;
+		printf("  Mean: %.2f pulses, StdDev: %.2f, Range: [%d, %d]\n",
+			   resetPulseCountMean, resetPulseCountStdDev, resetPulseCountMin, resetPulseCountMax);
+		
+		cout << "Redundant Operations (0→0, 1→1):" << endl;
+		printf("  Mean: %.2f pulses, StdDev: %.2f, Range: [%d, %d]\n",
+			   redundantPulseCountMean, redundantPulseCountStdDev, redundantPulseCountMin, redundantPulseCountMax);
+		
+		cout << "Pulse Durations:" << endl;
+		printf("  SET/Redundant-SET: %.2f ns\n", setPulse * 1e9);
+		printf("  RESET/Redundant-RESET: %.2f ns\n", resetPulse * 1e9);
+	}
 }

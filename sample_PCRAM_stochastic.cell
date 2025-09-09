@@ -1,0 +1,56 @@
+# Stochastic PCRAM Cell Configuration for Multi-Pulse Write Modeling
+# Based on sample_PCRAM.cell with added stochastic parameters
+# This configuration demonstrates realistic commercial NVM write timing patterns
+
+-MemCellType: PCRAM
+
+-ProcessNode: 90
+
+-CellArea (F^2): 9
+-CellAspectRatio: 1
+
+-ResistanceOn (ohm): 1000
+-ResistanceOff (ohm): 1000000
+
+-ReadMode: voltage
+-ReadCurrent (uA): 40
+-ReadEnergy (pJ): 2
+
+-ResetMode: current
+-ResetCurrent (uA): 300
+-ResetPulse (ns): 10
+
+-SetMode: current
+-SetCurrent (uA): 150
+-SetPulse (ns): 10
+
+-AccessType: CMOS
+-VoltageDropAccessDevice (V): 0.3
+-AccessCMOSWidth (F): 2
+
+# NEW: Stochastic Multi-Pulse Parameters
+-StochasticEnabled: true
+
+# SET transition (0→1) - Slowest operation, requires most pulses
+-SetPulseCountMean: 4.2
+-SetPulseCountStdDev: 1.5
+-SetPulseCountMin: 1
+-SetPulseCountMax: 12
+
+# RESET transition (1→0) - Moderate operation, fewer pulses than SET
+-ResetPulseCountMean: 3.8
+-ResetPulseCountStdDev: 1.2
+-ResetPulseCountMin: 1
+-ResetPulseCountMax: 10
+
+# Redundant operations (0→0, 1→1) - Fastest, minimal pulses needed
+-RedundantPulseCountMean: 1.1
+-RedundantPulseCountStdDev: 0.3
+-RedundantPulseCountMin: 1
+-RedundantPulseCountMax: 3
+
+# Expected Results with these parameters:
+# - SET operations: ~42ns average (4.2 pulses × 10ns)
+# - RESET operations: ~38ns average (3.8 pulses × 10ns)  
+# - Redundant operations: ~11ns average (1.1 pulses × 10ns)
+# - Write latency will vary based on transition type distribution

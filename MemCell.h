@@ -64,6 +64,10 @@ public:
 	TransitionType ClassifyTransition(bool currentBit, bool targetBit);
 	int SamplePulseCount(TransitionType transitionType);
 	double CalculateMultiPulseLatency(TransitionType transitionType, int pulseCount);
+	
+	/* Statistical validation functions */
+	void ValidateDistributionSampling(TransitionType type, int sampleCount);
+	void PrintStochasticParameters();
 
 	/* Properties */
 	MemCellType memCellType;	/* Memory cell type (like MRAM, PCRAM, etc.) */

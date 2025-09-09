@@ -597,14 +597,12 @@ void SubArray::CalculateLatency(double _rampInput) {
 				} else {
 					double baseLatency = MAX(rowDecoder.writeLatency, columnDecoderLatency + chargeLatency);	/* TO-DO: why not directly use precharger latency? */
 					writeLatency = CalculateStochasticWriteLatency(baseLatency);
-					resetLatency = baseLatency + cell->resetPulse;  /* Keep individual latencies for compatibility */
-					setLatency = baseLatency + cell->setPulse;
+					/* Individual latencies are now set within CalculateStochasticWriteLatency() */
 				}
 			} else if (cell->memCellType == FBRAM) {
 				double baseLatency = MAX(rowDecoder.writeLatency, columnDecoderLatency + chargeLatency);
 				writeLatency = CalculateStochasticWriteLatency(baseLatency);
-				resetLatency = baseLatency + cell->resetPulse;  /* Keep individual latencies for compatibility */
-				setLatency = baseLatency + cell->setPulse;
+				/* Individual latencies are now set within CalculateStochasticWriteLatency() */
 			} else { //memristor and MRAM
 				if (cell->accessType == diode_access || cell->accessType == none_access) {
 					double baseLatency;
@@ -617,8 +615,7 @@ void SubArray::CalculateLatency(double _rampInput) {
 				} else { // CMOS or Bipolar access
 					double baseLatency = MAX(rowDecoder.writeLatency, columnDecoderLatency + chargeLatency);
 					writeLatency = CalculateStochasticWriteLatency(baseLatency);
-					resetLatency = baseLatency + cell->resetPulse;  /* Keep individual latencies for compatibility */
-					setLatency = baseLatency + cell->setPulse;
+					/* Individual latencies are now set within CalculateStochasticWriteLatency() */
 				}
 			}
 		} else if (cell->memCellType == SLCNAND) {
@@ -912,22 +909,28 @@ double SubArray::CalculateStochasticWriteLatency(double baseLatency) {
 	 * 4. Return MAX(all cell completion times)
 	 */
 	
-	/* Placeholder: Use average pulse counts for now */
-	double avgSetLatency = cell->setPulseCountMean * cell->setPulse;
-	double avgResetLatency = cell->resetPulseCountMean * cell->resetPulse;
+	/* Sample actual pulse counts for stochastic timing */
+	int setPulseCount = cell->SamplePulseCount(SET);
+	int resetPulseCount = cell->SamplePulseCount(RESET);
+	double stochasticSetLatency = setPulseCount * cell->setPulse;
+	double stochasticResetLatency = resetPulseCount * cell->resetPulse;
+	
+	/* Store stochastic individual latencies for output reporting */
+	resetLatency = baseLatency + stochasticResetLatency;
+	setLatency = baseLatency + stochasticSetLatency;
 	
 	if (cell->memCellType == PCRAM || cell->memCellType == FBRAM) {
-		return baseLatency + MAX(avgResetLatency, avgSetLatency);
+		return baseLatency + MAX(stochasticResetLatency, stochasticSetLatency);
 	} else if (cell->memCellType == memristor || cell->memCellType == MRAM) {
 		if (cell->accessType == diode_access || cell->accessType == none_access) {
-			return baseLatency + avgResetLatency + avgSetLatency;
+			return baseLatency + stochasticResetLatency + stochasticSetLatency;
 		} else {
-			return baseLatency + MAX(avgResetLatency, avgSetLatency);
+			return baseLatency + MAX(stochasticResetLatency, stochasticSetLatency);
 		}
 	}
 	
 	/* Default fallback */
-	return baseLatency + MAX(avgResetLatency, avgSetLatency);
+	return baseLatency + MAX(stochasticResetLatency, stochasticSetLatency);
 }
 
 SubArray & SubArray::operator=(const SubArray &rhs) {
