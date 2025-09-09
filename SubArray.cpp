@@ -595,29 +595,30 @@ void SubArray::CalculateLatency(double _rampInput) {
 				if (inputParameter->writeScheme == write_and_verify) {
 					/*TO-DO: write and verify programming */
 				} else {
-					writeLatency = MAX(rowDecoder.writeLatency, columnDecoderLatency + chargeLatency);	/* TO-DO: why not directly use precharger latency? */
-					resetLatency = writeLatency + cell->resetPulse;
-					setLatency = writeLatency + cell->setPulse;
-					writeLatency += MAX(cell->resetPulse, cell->setPulse);
+					double baseLatency = MAX(rowDecoder.writeLatency, columnDecoderLatency + chargeLatency);	/* TO-DO: why not directly use precharger latency? */
+					writeLatency = CalculateStochasticWriteLatency(baseLatency);
+					resetLatency = baseLatency + cell->resetPulse;  /* Keep individual latencies for compatibility */
+					setLatency = baseLatency + cell->setPulse;
 				}
 			} else if (cell->memCellType == FBRAM) {
-				writeLatency = MAX(rowDecoder.writeLatency, columnDecoderLatency + chargeLatency);
-				resetLatency = writeLatency + cell->resetPulse;
-				setLatency = writeLatency + cell->setPulse;
-				writeLatency += MAX(cell->resetPulse, cell->setPulse);
+				double baseLatency = MAX(rowDecoder.writeLatency, columnDecoderLatency + chargeLatency);
+				writeLatency = CalculateStochasticWriteLatency(baseLatency);
+				resetLatency = baseLatency + cell->resetPulse;  /* Keep individual latencies for compatibility */
+				setLatency = baseLatency + cell->setPulse;
 			} else { //memristor and MRAM
 				if (cell->accessType == diode_access || cell->accessType == none_access) {
+					double baseLatency;
 					if (inputParameter->writeScheme == erase_before_reset || inputParameter->writeScheme == erase_before_set)
-						writeLatency = MAX(rowDecoder.writeLatency, chargeLatency);
+						baseLatency = MAX(rowDecoder.writeLatency, chargeLatency);
 					else
-						writeLatency = MAX(rowDecoder.writeLatency, columnDecoderLatency + chargeLatency);
-					writeLatency += chargeLatency;
-					writeLatency += cell->resetPulse + cell->setPulse;
+						baseLatency = MAX(rowDecoder.writeLatency, columnDecoderLatency + chargeLatency);
+					baseLatency += chargeLatency;
+					writeLatency = CalculateStochasticWriteLatency(baseLatency);
 				} else { // CMOS or Bipolar access
-					writeLatency = MAX(rowDecoder.writeLatency, columnDecoderLatency + chargeLatency);
-					resetLatency = writeLatency + cell->resetPulse;
-					setLatency = writeLatency + cell->setPulse;
-					writeLatency += MAX(cell->resetPulse, cell->setPulse);
+					double baseLatency = MAX(rowDecoder.writeLatency, columnDecoderLatency + chargeLatency);
+					writeLatency = CalculateStochasticWriteLatency(baseLatency);
+					resetLatency = baseLatency + cell->resetPulse;  /* Keep individual latencies for compatibility */
+					setLatency = baseLatency + cell->setPulse;
 				}
 			}
 		} else if (cell->memCellType == SLCNAND) {
@@ -883,6 +884,50 @@ void SubArray::PrintProperty() {
 	cout << "bitlineDelay: " << bitlineDelay*1e12 << "ps" << endl;
 	cout << "chargeLatency: " << chargeLatency*1e12 << "ps" << endl;
 	cout << "columnDecoderLatency: " << columnDecoderLatency*1e12 << "ps" << endl;
+}
+
+double SubArray::CalculateStochasticWriteLatency(double baseLatency) {
+	/* If stochastic mode is disabled, use original deterministic approach */
+	if (!cell->stochasticEnabled) {
+		/* Return original deterministic timing based on memory type */
+		if (cell->memCellType == PCRAM || cell->memCellType == FBRAM) {
+			return baseLatency + MAX(cell->resetPulse, cell->setPulse);
+		} else if (cell->memCellType == memristor || cell->memCellType == MRAM) {
+			if (cell->accessType == diode_access || cell->accessType == none_access) {
+				return baseLatency + cell->resetPulse + cell->setPulse;
+			} else {
+				return baseLatency + MAX(cell->resetPulse, cell->setPulse);
+			}
+		}
+		/* Default fallback */
+		return baseLatency + MAX(cell->resetPulse, cell->setPulse);
+	}
+	
+	/* TODO: Implement true stochastic word-level timing calculation */
+	/* For now, return deterministic behavior as placeholder */
+	/* This will be expanded in Phase 3 to implement:
+	 * 1. Determine word width from mux configuration
+	 * 2. Generate write pattern (for now assume worst-case mix)
+	 * 3. Calculate per-cell completion times
+	 * 4. Return MAX(all cell completion times)
+	 */
+	
+	/* Placeholder: Use average pulse counts for now */
+	double avgSetLatency = cell->setPulseCountMean * cell->setPulse;
+	double avgResetLatency = cell->resetPulseCountMean * cell->resetPulse;
+	
+	if (cell->memCellType == PCRAM || cell->memCellType == FBRAM) {
+		return baseLatency + MAX(avgResetLatency, avgSetLatency);
+	} else if (cell->memCellType == memristor || cell->memCellType == MRAM) {
+		if (cell->accessType == diode_access || cell->accessType == none_access) {
+			return baseLatency + avgResetLatency + avgSetLatency;
+		} else {
+			return baseLatency + MAX(avgResetLatency, avgSetLatency);
+		}
+	}
+	
+	/* Default fallback */
+	return baseLatency + MAX(avgResetLatency, avgSetLatency);
 }
 
 SubArray & SubArray::operator=(const SubArray &rhs) {

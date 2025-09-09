@@ -59,6 +59,11 @@ public:
 	void CalculateWriteEnergy();
 	double CalculateReadPower();
 	void PrintCell();
+	
+	/* Stochastic modeling functions */
+	TransitionType ClassifyTransition(bool currentBit, bool targetBit);
+	int SamplePulseCount(TransitionType transitionType);
+	double CalculateMultiPulseLatency(TransitionType transitionType, int pulseCount);
 
 	/* Properties */
 	MemCellType memCellType;	/* Memory cell type (like MRAM, PCRAM, etc.) */
@@ -88,6 +93,27 @@ public:
 	double setPulse;		/* Set pulse duration (ns) */
 	double setEnergy;       /* Set energy per cell (pJ) */
 	CellAccessType accessType;	/* Cell access type: CMOS, BJT, or diode */
+
+	/* Stochastic pulse count distribution parameters */
+	bool stochasticEnabled;     /* Enable stochastic multi-pulse modeling */
+	
+	/* SET transition (0→1) distribution parameters */
+	double setPulseCountMean;
+	double setPulseCountStdDev;
+	int setPulseCountMin;
+	int setPulseCountMax;
+	
+	/* RESET transition (1→0) distribution parameters */
+	double resetPulseCountMean;
+	double resetPulseCountStdDev;
+	int resetPulseCountMin;
+	int resetPulseCountMax;
+	
+	/* Redundant operation distribution parameters */
+	double redundantPulseCountMean;
+	double redundantPulseCountStdDev;
+	int redundantPulseCountMin;
+	int redundantPulseCountMax;
 
 	/* Optional properties */
 	int stitching;			/* If non-zero, add stitching overhead for every x cells */

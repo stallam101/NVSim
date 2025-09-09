@@ -60,6 +60,9 @@ public:
 	void CalculateLatency(double _rampInput);
 	void CalculatePower();
 	SubArray & operator=(const SubArray &);
+	
+	/* Stochastic write modeling */
+	double CalculateStochasticWriteLatency(double baseLatency);
 
 	/* Properties */
 	bool initialized;	/* Initialization flag */

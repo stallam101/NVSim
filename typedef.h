@@ -58,6 +58,14 @@ enum CellAccessType
 	none_access
 };
 
+enum TransitionType
+{
+	SET,            /* 0→1 transition: slowest, typically ~4 pulses */
+	RESET,          /* 1→0 transition: moderate, typically ~3 pulses */
+	REDUNDANT_SET,  /* 0→0 transition: minimal, typically ~1 pulse */
+	REDUNDANT_RESET /* 1→1 transition: minimal, typically ~1 pulse */
+};
+
 enum DeviceRoadmap
 {
 	HP,		/* High performance */

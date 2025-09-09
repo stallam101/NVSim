@@ -67,6 +67,21 @@ MemCell::MemCell() {
 	processNode         = 0;
 	setEnergy           = 0;
 
+	/* Stochastic parameters - initialize to deterministic defaults */
+	stochasticEnabled           = false;
+	setPulseCountMean          = 1.0;
+	setPulseCountStdDev        = 0.0;
+	setPulseCountMin           = 1;
+	setPulseCountMax           = 1;
+	resetPulseCountMean        = 1.0;
+	resetPulseCountStdDev      = 0.0;
+	resetPulseCountMin         = 1;
+	resetPulseCountMax         = 1;
+	redundantPulseCountMean    = 1.0;
+	redundantPulseCountStdDev  = 0.0;
+	redundantPulseCountMin     = 1;
+	redundantPulseCountMax     = 1;
+
 	/* Optional */
 	stitching         = 0;
 	gateOxThicknessFactor = 2;
@@ -697,4 +712,70 @@ void MemCell::PrintCell()
 		cout << "Erase Time         : " << TO_SECOND(flashEraseTime) << endl;
 		cout << "Gate Coupling Ratio: " << gateCouplingRatio << endl;
 	}
+}
+
+/* Stochastic modeling implementations */
+
+TransitionType MemCell::ClassifyTransition(bool currentBit, bool targetBit) {
+	if (!currentBit && targetBit) {
+		return SET;         /* 0→1 transition */
+	} else if (currentBit && !targetBit) {
+		return RESET;       /* 1→0 transition */
+	} else if (!currentBit && !targetBit) {
+		return REDUNDANT_SET;   /* 0→0 redundant operation */
+	} else {
+		return REDUNDANT_RESET; /* 1→1 redundant operation */
+	}
+}
+
+int MemCell::SamplePulseCount(TransitionType transitionType) {
+	/* If stochastic mode is disabled, return fixed single pulse */
+	if (!stochasticEnabled) {
+		return 1;
+	}
+	
+	/* For now, return mean values (will implement proper sampling later) */
+	int pulseCount;
+	switch (transitionType) {
+		case SET:
+			pulseCount = (int)round(setPulseCountMean);
+			break;
+		case RESET:
+			pulseCount = (int)round(resetPulseCountMean);
+			break;
+		case REDUNDANT_SET:
+		case REDUNDANT_RESET:
+			pulseCount = (int)round(redundantPulseCountMean);
+			break;
+		default:
+			pulseCount = 1;
+			break;
+	}
+	
+	/* Apply bounds checking */
+	if (transitionType == SET) {
+		pulseCount = (pulseCount < setPulseCountMin) ? setPulseCountMin : pulseCount;
+		pulseCount = (pulseCount > setPulseCountMax) ? setPulseCountMax : pulseCount;
+	} else if (transitionType == RESET) {
+		pulseCount = (pulseCount < resetPulseCountMin) ? resetPulseCountMin : pulseCount;
+		pulseCount = (pulseCount > resetPulseCountMax) ? resetPulseCountMax : pulseCount;
+	} else {
+		pulseCount = (pulseCount < redundantPulseCountMin) ? redundantPulseCountMin : pulseCount;
+		pulseCount = (pulseCount > redundantPulseCountMax) ? redundantPulseCountMax : pulseCount;
+	}
+	
+	return pulseCount;
+}
+
+double MemCell::CalculateMultiPulseLatency(TransitionType transitionType, int pulseCount) {
+	/* Calculate multi-pulse completion time */
+	double singlePulseDuration;
+	
+	if (transitionType == SET || transitionType == REDUNDANT_SET) {
+		singlePulseDuration = setPulse;
+	} else {
+		singlePulseDuration = resetPulse;
+	}
+	
+	return pulseCount * singlePulseDuration;
 }
