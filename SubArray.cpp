@@ -39,7 +39,9 @@
 #include "formula.h"
 #include "global.h"
 #include "constant.h"
+#include "InputParameter.h"
 #include <math.h>
+#include <algorithm>
 
 SubArray::SubArray() {
 	// TODO Auto-generated constructor stub
@@ -900,15 +902,16 @@ double SubArray::CalculateStochasticWriteLatency(double baseLatency) {
 		return baseLatency + MAX(cell->resetPulse, cell->setPulse);
 	}
 	
-	/* TODO: Implement true stochastic word-level timing calculation */
-	/* For now, return deterministic behavior as placeholder */
-	/* This will be expanded in Phase 3 to implement:
-	 * 1. Determine word width from mux configuration
-	 * 2. Generate write pattern (for now assume worst-case mix)
-	 * 3. Calculate per-cell completion times
-	 * 4. Return MAX(all cell completion times)
-	 */
+	/* Phase 3: Check if word-level pattern analysis is enabled */
+	if (inputParameter->writePattern.enabled && inputParameter->writePattern.patternType != WRITE_PATTERN_NONE) {
+		/* Calculate effective bit offset for this subarray within the word */
+		int bitOffset = 0; /* In a real system, this would be calculated from bank/subarray position */
+		
+		/* Use word-level stochastic calculation */
+		return CalculateWordStochasticWriteLatency(baseLatency, inputParameter->writePattern, bitOffset);
+	}
 	
+	/* Legacy Phase 2: Cell-level stochastic timing (random sampling) */
 	/* Sample actual pulse counts for stochastic timing */
 	int setPulseCount = cell->SamplePulseCount(SET);
 	int resetPulseCount = cell->SamplePulseCount(RESET);
@@ -931,6 +934,114 @@ double SubArray::CalculateStochasticWriteLatency(double baseLatency) {
 	
 	/* Default fallback */
 	return baseLatency + MAX(stochasticResetLatency, stochasticSetLatency);
+}
+
+TransitionType SubArray::DetermineTransitionType(bool currentBit, bool targetBit) {
+	if (currentBit == false && targetBit == true) {
+		return SET;             /* 0→1 transition: slowest */
+	} else if (currentBit == true && targetBit == false) {
+		return RESET;           /* 1→0 transition: moderate */
+	} else if (currentBit == false && targetBit == false) {
+		return REDUNDANT_RESET; /* 0→0 transition: minimal */
+	} else {
+		return REDUNDANT_SET;   /* 1→1 transition: minimal */
+	}
+}
+
+double SubArray::CalculateWordStochasticWriteLatency(double baseLatency, const WritePattern& pattern, int bitOffset) {
+	/* Determine the effective bits this SubArray handles */
+	int bitsPerSubArray = numColumn / muxSenseAmp / muxOutputLev1 / muxOutputLev2;
+	
+	/* Ensure we don't exceed word width */
+	int effectiveBits = std::min(bitsPerSubArray, pattern.effectiveWordWidth - bitOffset);
+	if (effectiveBits <= 0) {
+		/* This SubArray doesn't handle any bits in the word */
+		return baseLatency;
+	}
+	
+	double maxCellCompletionTime = baseLatency;
+	
+	/* Analyze each bit position handled by this SubArray */
+	for (int i = 0; i < effectiveBits; i++) {
+		int globalBitPosition = bitOffset + i;
+		
+		TransitionType transitionType;
+		
+		/* Determine transition type based on pattern type */
+		switch (pattern.patternType) {
+			case WRITE_PATTERN_SPECIFIC: {
+				/* Extract bits from current and target data */
+				bool currentBit = (pattern.currentData >> globalBitPosition) & 1;
+				bool targetBit = (pattern.targetData >> globalBitPosition) & 1;
+				transitionType = DetermineTransitionType(currentBit, targetBit);
+				break;
+			}
+			
+			case WRITE_PATTERN_WORST_CASE: {
+				/* Generate worst-case pattern */
+				switch (pattern.worstCaseMode) {
+					case WORST_CASE_ALL_SET:
+						transitionType = SET;
+						break;
+					case WORST_CASE_ALL_RESET:
+						transitionType = RESET;
+						break;
+					case WORST_CASE_ALL_REDUNDANT:
+						transitionType = REDUNDANT_SET;
+						break;
+					case WORST_CASE_ALTERNATING:
+						transitionType = (globalBitPosition % 2 == 0) ? SET : RESET;
+						break;
+					default:
+						transitionType = SET; /* Default to slowest */
+				}
+				break;
+			}
+			
+			case WRITE_PATTERN_RANDOM_HAMMING:
+			case WRITE_PATTERN_STATISTICAL:
+			default: {
+				/* For now, assume worst case (SET) - this could be extended with probabilistic sampling */
+				transitionType = SET;
+				break;
+			}
+		}
+		
+		/* Sample pulse count for this specific transition type */
+		int pulseCount = cell->SamplePulseCount(transitionType);
+		
+		/* Calculate completion time for this cell */
+		double cellPulseLatency;
+		switch (transitionType) {
+			case SET:
+				cellPulseLatency = pulseCount * cell->setPulse;
+				break;
+			case RESET:
+				cellPulseLatency = pulseCount * cell->resetPulse;
+				break;
+			case REDUNDANT_SET:
+			case REDUNDANT_RESET:
+				/* Redundant operations are much faster */
+				cellPulseLatency = pulseCount * std::min(cell->setPulse, cell->resetPulse) * 0.1;
+				break;
+			default:
+				cellPulseLatency = pulseCount * cell->setPulse; /* Fallback */
+		}
+		
+		double cellCompletionTime = baseLatency + cellPulseLatency;
+		
+		/* Track maximum (word completion = slowest cell) */
+		maxCellCompletionTime = std::max(maxCellCompletionTime, cellCompletionTime);
+	}
+	
+	/* Store representative latencies for output reporting */
+	/* Use average of sampled SET and RESET for reporting purposes */
+	int setSample = cell->SamplePulseCount(SET);
+	int resetSample = cell->SamplePulseCount(RESET);
+	resetLatency = baseLatency + resetSample * cell->resetPulse;
+	setLatency = baseLatency + setSample * cell->setPulse;
+	
+	return maxCellCompletionTime;
 }
 
 SubArray & SubArray::operator=(const SubArray &rhs) {

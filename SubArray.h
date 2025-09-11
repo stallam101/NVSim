@@ -45,6 +45,10 @@
 #include "Mux.h"
 #include "typedef.h"
 
+/* Forward declarations for Phase 3 */
+struct WritePattern;
+enum TransitionType;
+
 class SubArray: public FunctionUnit {
 public:
 	SubArray();
@@ -63,6 +67,9 @@ public:
 	
 	/* Stochastic write modeling */
 	double CalculateStochasticWriteLatency(double baseLatency);
+	/* Phase 3: Word-level stochastic write modeling */
+	double CalculateWordStochasticWriteLatency(double baseLatency, const WritePattern& pattern, int bitOffset);
+	TransitionType DetermineTransitionType(bool currentBit, bool targetBit);
 
 	/* Properties */
 	bool initialized;	/* Initialization flag */
