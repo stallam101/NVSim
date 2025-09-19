@@ -70,6 +70,9 @@ public:
 	/* Phase 3: Word-level stochastic write modeling */
 	double CalculateWordStochasticWriteLatency(double baseLatency, const WritePattern& pattern, int bitOffset);
 	TransitionType DetermineTransitionType(bool currentBit, bool targetBit);
+	/* Two-phase write architecture helpers */
+	TransitionType DetermineSetPhaseOperation(const WritePattern& pattern, int globalBitPosition);
+	TransitionType DetermineResetPhaseOperation(const WritePattern& pattern, int globalBitPosition);
 
 	/* Properties */
 	bool initialized;	/* Initialization flag */

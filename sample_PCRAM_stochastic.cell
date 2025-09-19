@@ -43,9 +43,9 @@
 -ResetPulseCountMin: 1
 -ResetPulseCountMax: 10
 
-# Redundant operations (0→0, 1→1) - Fastest, minimal pulses needed
--RedundantPulseCountMean: 1.1
--RedundantPulseCountStdDev: 0.3
+# Redundant operations (0→0, 1→1) - Very tight distribution, nearly constant
+-RedundantPulseCountMean: 1.0
+-RedundantPulseCountStdDev: 0.1
 -RedundantPulseCountMin: 1
--RedundantPulseCountMax: 3
+-RedundantPulseCountMax: 1
 

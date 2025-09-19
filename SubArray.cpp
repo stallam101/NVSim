@@ -959,89 +959,132 @@ double SubArray::CalculateWordStochasticWriteLatency(double baseLatency, const W
 		return baseLatency;
 	}
 	
-	double maxCellCompletionTime = baseLatency;
+	/* TWO-PHASE WRITE ARCHITECTURE:
+	 * Every write operation has both SET and RESET phases regardless of data pattern.
+	 * Each phase waits for the slowest cell in that phase to complete.
+	 * Total write time = SET phase time + RESET phase time
+	 */
 	
-	/* Analyze each bit position handled by this SubArray */
+	// Phase 1: SET phase - sample ALL bits for SET operations
+	double maxSetPhaseTime = 0;
 	for (int i = 0; i < effectiveBits; i++) {
 		int globalBitPosition = bitOffset + i;
 		
-		TransitionType transitionType;
+		// Determine what type of SET operation this bit needs
+		TransitionType setTransitionType = DetermineSetPhaseOperation(pattern, globalBitPosition);
 		
-		/* Determine transition type based on pattern type */
-		switch (pattern.patternType) {
-			case WRITE_PATTERN_SPECIFIC: {
-				/* Extract bits from current and target data */
-				bool currentBit = (pattern.currentData >> globalBitPosition) & 1;
-				bool targetBit = (pattern.targetData >> globalBitPosition) & 1;
-				transitionType = DetermineTransitionType(currentBit, targetBit);
-				break;
-			}
-			
-			case WRITE_PATTERN_WORST_CASE: {
-				/* Generate worst-case pattern */
-				switch (pattern.worstCaseMode) {
-					case WORST_CASE_ALL_SET:
-						transitionType = SET;
-						break;
-					case WORST_CASE_ALL_RESET:
-						transitionType = RESET;
-						break;
-					case WORST_CASE_ALL_REDUNDANT:
-						transitionType = REDUNDANT_SET;
-						break;
-					case WORST_CASE_ALTERNATING:
-						transitionType = (globalBitPosition % 2 == 0) ? SET : RESET;
-						break;
-					default:
-						transitionType = SET; /* Default to slowest */
-				}
-				break;
-			}
-			
-			case WRITE_PATTERN_RANDOM_HAMMING:
-			case WRITE_PATTERN_STATISTICAL:
-			default: {
-				/* For now, assume worst case (SET) - this could be extended with probabilistic sampling */
-				transitionType = SET;
-				break;
-			}
-		}
+		// Sample pulse count for SET phase operation
+		int setPulseCount = cell->SamplePulseCount(setTransitionType);
+		double setCellTime = setPulseCount * cell->setPulse;
 		
-		/* Sample pulse count for this specific transition type */
-		int pulseCount = cell->SamplePulseCount(transitionType);
-		
-		/* Calculate completion time for this cell */
-		double cellPulseLatency;
-		switch (transitionType) {
-			case SET:
-				cellPulseLatency = pulseCount * cell->setPulse;
-				break;
-			case RESET:
-				cellPulseLatency = pulseCount * cell->resetPulse;
-				break;
-			case REDUNDANT_SET:
-			case REDUNDANT_RESET:
-				/* Redundant operations are much faster */
-				cellPulseLatency = pulseCount * std::min(cell->setPulse, cell->resetPulse) * 0.1;
-				break;
-			default:
-				cellPulseLatency = pulseCount * cell->setPulse; /* Fallback */
-		}
-		
-		double cellCompletionTime = baseLatency + cellPulseLatency;
-		
-		/* Track maximum (word completion = slowest cell) */
-		maxCellCompletionTime = std::max(maxCellCompletionTime, cellCompletionTime);
+		// Track maximum SET phase time
+		maxSetPhaseTime = std::max(maxSetPhaseTime, setCellTime);
 	}
 	
-	/* Store representative latencies for output reporting */
-	/* Use average of sampled SET and RESET for reporting purposes */
-	int setSample = cell->SamplePulseCount(SET);
-	int resetSample = cell->SamplePulseCount(RESET);
-	resetLatency = baseLatency + resetSample * cell->resetPulse;
-	setLatency = baseLatency + setSample * cell->setPulse;
+	// Phase 2: RESET phase - sample ALL bits for RESET operations  
+	double maxResetPhaseTime = 0;
+	for (int i = 0; i < effectiveBits; i++) {
+		int globalBitPosition = bitOffset + i;
+		
+		// Determine what type of RESET operation this bit needs
+		TransitionType resetTransitionType = DetermineResetPhaseOperation(pattern, globalBitPosition);
+		
+		// Sample pulse count for RESET phase operation
+		int resetPulseCount = cell->SamplePulseCount(resetTransitionType);
+		double resetCellTime = resetPulseCount * cell->resetPulse;
+		
+		// Track maximum RESET phase time
+		maxResetPhaseTime = std::max(maxResetPhaseTime, resetCellTime);
+	}
 	
-	return maxCellCompletionTime;
+	/* Store phase latencies for output reporting */
+	setLatency = baseLatency + maxSetPhaseTime;
+	resetLatency = baseLatency + maxResetPhaseTime;
+	
+	/* Total write latency = base + SET phase + RESET phase */
+	return baseLatency + maxSetPhaseTime + maxResetPhaseTime;
+}
+
+TransitionType SubArray::DetermineSetPhaseOperation(const WritePattern& pattern, int globalBitPosition) {
+	/* In SET phase, determine what this bit needs to do:
+	 * - If bit needs 0→1 transition: actual SET operation
+	 * - Otherwise: redundant SET operation (fast, tight distribution)
+	 */
+	
+	switch (pattern.patternType) {
+		case WRITE_PATTERN_SPECIFIC: {
+			bool currentBit = (pattern.currentData >> globalBitPosition) & 1;
+			bool targetBit = (pattern.targetData >> globalBitPosition) & 1;
+			
+			if (currentBit == false && targetBit == true) {
+				return SET; /* 0→1: actual SET operation needed */
+			} else {
+				return REDUNDANT_SET; /* No SET needed: redundant operation */
+			}
+		}
+		
+		case WRITE_PATTERN_WORST_CASE: {
+			switch (pattern.worstCaseMode) {
+				case WORST_CASE_ALL_SET:
+					return SET; /* Force all bits to do actual SET */
+				case WORST_CASE_ALL_RESET:
+				case WORST_CASE_ALL_REDUNDANT:
+					return REDUNDANT_SET; /* No SET needed */
+				case WORST_CASE_ALTERNATING:
+					/* Alternating pattern: every other bit needs SET */
+					return (globalBitPosition % 2 == 0) ? SET : REDUNDANT_SET;
+				default:
+					return SET;
+			}
+		}
+		
+		case WRITE_PATTERN_RANDOM_HAMMING:
+		case WRITE_PATTERN_STATISTICAL:
+		default:
+			/* Default: assume SET needed (could be extended with probabilities) */
+			return SET;
+	}
+}
+
+TransitionType SubArray::DetermineResetPhaseOperation(const WritePattern& pattern, int globalBitPosition) {
+	/* In RESET phase, determine what this bit needs to do:
+	 * - If bit needs 1→0 transition: actual RESET operation
+	 * - Otherwise: redundant RESET operation (fast, tight distribution)
+	 */
+	
+	switch (pattern.patternType) {
+		case WRITE_PATTERN_SPECIFIC: {
+			bool currentBit = (pattern.currentData >> globalBitPosition) & 1;
+			bool targetBit = (pattern.targetData >> globalBitPosition) & 1;
+			
+			if (currentBit == true && targetBit == false) {
+				return RESET; /* 1→0: actual RESET operation needed */
+			} else {
+				return REDUNDANT_RESET; /* No RESET needed: redundant operation */
+			}
+		}
+		
+		case WRITE_PATTERN_WORST_CASE: {
+			switch (pattern.worstCaseMode) {
+				case WORST_CASE_ALL_RESET:
+					return RESET; /* Force all bits to do actual RESET */
+				case WORST_CASE_ALL_SET:
+				case WORST_CASE_ALL_REDUNDANT:
+					return REDUNDANT_RESET; /* No RESET needed */
+				case WORST_CASE_ALTERNATING:
+					/* Alternating pattern: every other bit needs RESET */
+					return (globalBitPosition % 2 == 1) ? RESET : REDUNDANT_RESET;
+				default:
+					return RESET;
+			}
+		}
+		
+		case WRITE_PATTERN_RANDOM_HAMMING:
+		case WRITE_PATTERN_STATISTICAL:
+		default:
+			/* Default: assume RESET needed (could be extended with probabilities) */
+			return RESET;
+	}
 }
 
 SubArray & SubArray::operator=(const SubArray &rhs) {
