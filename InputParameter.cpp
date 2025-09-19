@@ -557,7 +557,80 @@ void InputParameter::ReadInputParameterFromFile(const std::string & inputFile) {
 			isConstraintApplied = true;
 			continue;
 		}
+		
+		/* Phase 3: Write pattern parsing for word-level stochastic modeling */
+		if (!strncmp("-WritePatternType:", line, strlen("-WritePatternType:"))) {
+			sscanf(line, "-WritePatternType: %s", tmp);
+			if (!strcmp(tmp, "none")) {
+				writePattern.patternType = WRITE_PATTERN_NONE;
+			} else if (!strcmp(tmp, "specific")) {
+				writePattern.patternType = WRITE_PATTERN_SPECIFIC;
+				writePattern.enabled = true;
+			} else if (!strcmp(tmp, "random_hamming")) {
+				writePattern.patternType = WRITE_PATTERN_RANDOM_HAMMING;
+				writePattern.enabled = true;
+			} else if (!strcmp(tmp, "worst_case")) {
+				writePattern.patternType = WRITE_PATTERN_WORST_CASE;
+				writePattern.enabled = true;
+			} else if (!strcmp(tmp, "statistical")) {
+				writePattern.patternType = WRITE_PATTERN_STATISTICAL;
+				writePattern.enabled = true;
+			} else {
+				writePattern.patternType = WRITE_PATTERN_NONE;
+			}
+			continue;
+		}
+		if (!strncmp("-CurrentData:", line, strlen("-CurrentData:"))) {
+			sscanf(line, "-CurrentData: 0x%llx", &writePattern.currentData);
+			continue;
+		}
+		if (!strncmp("-TargetData:", line, strlen("-TargetData:"))) {
+			sscanf(line, "-TargetData: 0x%llx", &writePattern.targetData);
+			continue;
+		}
+		if (!strncmp("-HammingDistanceRatio:", line, strlen("-HammingDistanceRatio:"))) {
+			sscanf(line, "-HammingDistanceRatio: %lf", &writePattern.hammingDistanceRatio);
+			continue;
+		}
+		if (!strncmp("-SetRatio:", line, strlen("-SetRatio:"))) {
+			sscanf(line, "-SetRatio: %lf", &writePattern.setRatio);
+			continue;
+		}
+		if (!strncmp("-ResetRatio:", line, strlen("-ResetRatio:"))) {
+			sscanf(line, "-ResetRatio: %lf", &writePattern.resetRatio);
+			continue;
+		}
+		if (!strncmp("-WorstCaseMode:", line, strlen("-WorstCaseMode:"))) {
+			sscanf(line, "-WorstCaseMode: %s", tmp);
+			if (!strcmp(tmp, "all_set")) {
+				writePattern.worstCaseMode = WORST_CASE_ALL_SET;
+			} else if (!strcmp(tmp, "all_reset")) {
+				writePattern.worstCaseMode = WORST_CASE_ALL_RESET;
+			} else if (!strcmp(tmp, "all_redundant")) {
+				writePattern.worstCaseMode = WORST_CASE_ALL_REDUNDANT;
+			} else if (!strcmp(tmp, "alternating")) {
+				writePattern.worstCaseMode = WORST_CASE_ALTERNATING;
+			} else {
+				writePattern.worstCaseMode = WORST_CASE_ALL_SET;
+			}
+			continue;
+		}
+		if (!strncmp("-SetTransitionProbability:", line, strlen("-SetTransitionProbability:"))) {
+			sscanf(line, "-SetTransitionProbability: %lf", &writePattern.setTransitionProbability);
+			continue;
+		}
+		if (!strncmp("-ResetTransitionProbability:", line, strlen("-ResetTransitionProbability:"))) {
+			sscanf(line, "-ResetTransitionProbability: %lf", &writePattern.resetTransitionProbability);
+			continue;
+		}
+		if (!strncmp("-RedundantTransitionProbability:", line, strlen("-RedundantTransitionProbability:"))) {
+			sscanf(line, "-RedundantTransitionProbability: %lf", &writePattern.redundantTransitionProbability);
+			continue;
+		}
 	}
+	
+	/* Set effective word width from parsed wordWidth */
+	writePattern.effectiveWordWidth = (int)wordWidth;
 
 	fclose(fp);
 }

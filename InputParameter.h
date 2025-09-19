@@ -46,6 +46,54 @@
 
 using namespace std;
 
+/* WritePattern support for Phase 3 word-level stochastic modeling */
+enum WritePatternType {
+	WRITE_PATTERN_NONE,      /* No specific pattern - use legacy behavior */
+	WRITE_PATTERN_SPECIFIC,  /* Explicit current→target data specification */
+	WRITE_PATTERN_RANDOM_HAMMING,   /* Random pattern with specified Hamming distance */
+	WRITE_PATTERN_WORST_CASE,       /* Worst-case patterns (all SET, all RESET, etc.) */
+	WRITE_PATTERN_STATISTICAL       /* Statistical pattern with configurable ratios */
+};
+
+enum WorstCaseMode {
+	WORST_CASE_ALL_SET,      /* All bits transition 0→1 (slowest) */
+	WORST_CASE_ALL_RESET,    /* All bits transition 1→0 (moderate) */
+	WORST_CASE_ALL_REDUNDANT,/* All bits remain same (fastest) */
+	WORST_CASE_ALTERNATING   /* Alternating SET/RESET pattern */
+};
+
+struct WritePattern {
+	WritePatternType patternType;
+	
+	/* For WRITE_PATTERN_SPECIFIC */
+	uint64_t currentData;    /* Current memory state */
+	uint64_t targetData;     /* Data being written */
+	
+	/* For WRITE_PATTERN_RANDOM_HAMMING */
+	double hammingDistanceRatio;  /* Fraction of bits that change (0.0-1.0) */
+	double setRatio;             /* Of changing bits, fraction that are SET (0.0-1.0) */
+	double resetRatio;           /* Of changing bits, fraction that are RESET (0.0-1.0) */
+	
+	/* For WRITE_PATTERN_WORST_CASE */
+	WorstCaseMode worstCaseMode;
+	
+	/* For WRITE_PATTERN_STATISTICAL */  
+	double setTransitionProbability;    /* Probability of 0→1 transitions */
+	double resetTransitionProbability;  /* Probability of 1→0 transitions */
+	double redundantTransitionProbability; /* Probability of no-change operations */
+	
+	/* Common properties */
+	int effectiveWordWidth;  /* Actual word width from configuration */
+	bool enabled;           /* Enable word-level pattern analysis */
+	
+	/* Constructor */
+	WritePattern() : patternType(WRITE_PATTERN_NONE), currentData(0), targetData(0),
+	                hammingDistanceRatio(0.5), setRatio(0.5), resetRatio(0.5),
+	                worstCaseMode(WORST_CASE_ALL_SET), setTransitionProbability(0.33),
+	                resetTransitionProbability(0.33), redundantTransitionProbability(0.34),
+	                effectiveWordWidth(64), enabled(false) {}
+};
+
 class InputParameter {
 public:
 	InputParameter();
@@ -129,6 +177,9 @@ public:
 	int maxIsLocalWireLowSwing;		/* This one is actually boolean */
 	int minIsGlobalWireLowSwing;		/* This one is actually boolean */
 	int maxIsGlobalWireLowSwing;		/* This one is actually boolean */
+	
+	/* Phase 3: Word-level stochastic write pattern modeling */
+	WritePattern writePattern;		/* Write pattern specification for word-level analysis */
 };
 
 #endif /* INPUTPARAMETER_H_ */
