@@ -49,8 +49,3 @@
 -RedundantPulseCountMin: 1
 -RedundantPulseCountMax: 3
 
-# Expected Results with these parameters:
-# - SET operations: ~42ns average (4.2 pulses × 10ns)
-# - RESET operations: ~38ns average (3.8 pulses × 10ns)  
-# - Redundant operations: ~11ns average (1.1 pulses × 10ns)
-# - Write latency will vary based on transition type distribution
