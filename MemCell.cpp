@@ -885,6 +885,7 @@ void MemCell::ValidateDistributionSampling(TransitionType type, int sampleCount)
 		case RESET: cout << "RESET"; break;
 		case REDUNDANT_SET: 
 		case REDUNDANT_RESET: cout << "REDUNDANT"; break;
+		case NONE: cout << "NONE"; break;
 	}
 	cout << " transition ===" << endl;
 	

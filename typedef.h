@@ -60,10 +60,11 @@ enum CellAccessType
 
 enum TransitionType
 {
-	SET,            /* 0→1 transition: slowest, typically ~4 pulses */
-	RESET,          /* 1→0 transition: moderate, typically ~3 pulses */
-	REDUNDANT_SET,  /* 0→0 transition: minimal, typically ~1 pulse */
-	REDUNDANT_RESET /* 1→1 transition: minimal, typically ~1 pulse */
+	SET,            /* 0→1 transition: +V bias, HRS→LRS, true SET operation */
+	RESET,          /* 1→0 transition: -V bias, LRS→HRS, true RESET operation */
+	REDUNDANT_SET,  /* 1→1 transition: +V bias, LRS state, reinforcing SET bias */
+	REDUNDANT_RESET, /* 0→0 transition: -V bias, HRS state, reinforcing RESET bias */
+	NONE            /* No transition: 0V bias, no voltage applied, no sampling */
 };
 
 enum DeviceRoadmap

@@ -965,13 +965,18 @@ double SubArray::CalculateWordStochasticWriteLatency(double baseLatency, const W
 	 * Total write time = SET phase time + RESET phase time
 	 */
 	
-	// Phase 1: SET phase - sample ALL bits for SET operations
+	// Phase 1: SET phase - only cells with +V bias participate
 	double maxSetPhaseTime = 0;
 	for (int i = 0; i < effectiveBits; i++) {
 		int globalBitPosition = bitOffset + i;
 		
 		// Determine what type of SET operation this bit needs
 		TransitionType setTransitionType = DetermineSetPhaseOperation(pattern, globalBitPosition);
+		
+		if (setTransitionType == NONE) {
+			// No voltage bias applied - cell doesn't participate in SET phase
+			continue;
+		}
 		
 		// Sample pulse count for SET phase operation
 		int setPulseCount = cell->SamplePulseCount(setTransitionType);
@@ -981,13 +986,18 @@ double SubArray::CalculateWordStochasticWriteLatency(double baseLatency, const W
 		maxSetPhaseTime = std::max(maxSetPhaseTime, setCellTime);
 	}
 	
-	// Phase 2: RESET phase - sample ALL bits for RESET operations  
+	// Phase 2: RESET phase - only cells with -V bias participate
 	double maxResetPhaseTime = 0;
 	for (int i = 0; i < effectiveBits; i++) {
 		int globalBitPosition = bitOffset + i;
 		
 		// Determine what type of RESET operation this bit needs
 		TransitionType resetTransitionType = DetermineResetPhaseOperation(pattern, globalBitPosition);
+		
+		if (resetTransitionType == NONE) {
+			// No voltage bias applied - cell doesn't participate in RESET phase
+			continue;
+		}
 		
 		// Sample pulse count for RESET phase operation
 		int resetPulseCount = cell->SamplePulseCount(resetTransitionType);
@@ -1006,9 +1016,10 @@ double SubArray::CalculateWordStochasticWriteLatency(double baseLatency, const W
 }
 
 TransitionType SubArray::DetermineSetPhaseOperation(const WritePattern& pattern, int globalBitPosition) {
-	/* In SET phase, determine what this bit needs to do:
-	 * - If bit needs 0→1 transition: actual SET operation
-	 * - Otherwise: redundant SET operation (fast, tight distribution)
+	/* SET phase: Apply +V bias only to cells where targetBit = 1
+	 * targetBit = 0: NONE (no bias applied)
+	 * targetBit = 1 + currentBit = 0: SET (0→1, HRS→LRS, true SET)
+	 * targetBit = 1 + currentBit = 1: REDUNDANT_SET (1→1, reinforcing bias to LRS)
 	 */
 	
 	switch (pattern.patternType) {
@@ -1016,23 +1027,28 @@ TransitionType SubArray::DetermineSetPhaseOperation(const WritePattern& pattern,
 			bool currentBit = (pattern.currentData >> globalBitPosition) & 1;
 			bool targetBit = (pattern.targetData >> globalBitPosition) & 1;
 			
-			if (currentBit == false && targetBit == true) {
-				return SET; /* 0→1: actual SET operation needed */
+			if (targetBit == false) {
+				return NONE; /* No +V bias applied in SET phase */
+			}
+			/* targetBit == true: +V bias applied */
+			if (currentBit == false) {
+				return SET; /* 0→1: true SET operation (HRS→LRS) */
 			} else {
-				return REDUNDANT_SET; /* No SET needed: redundant operation */
+				return REDUNDANT_SET; /* 1→1: reinforcing SET bias (already LRS) */
 			}
 		}
 		
 		case WRITE_PATTERN_WORST_CASE: {
 			switch (pattern.worstCaseMode) {
 				case WORST_CASE_ALL_SET:
-					return SET; /* Force all bits to do actual SET */
+					return SET; /* Force all bits to do true SET (0→1) */
 				case WORST_CASE_ALL_RESET:
+					return NONE; /* All bits target=0, no +V bias in SET phase */
 				case WORST_CASE_ALL_REDUNDANT:
-					return REDUNDANT_SET; /* No SET needed */
+					return REDUNDANT_SET; /* All bits already at target, reinforcing bias */
 				case WORST_CASE_ALTERNATING:
-					/* Alternating pattern: every other bit needs SET */
-					return (globalBitPosition % 2 == 0) ? SET : REDUNDANT_SET;
+					/* Alternating: target=1 for even positions, target=0 for odd */
+					return (globalBitPosition % 2 == 0) ? SET : NONE;
 				default:
 					return SET;
 			}
@@ -1041,15 +1057,16 @@ TransitionType SubArray::DetermineSetPhaseOperation(const WritePattern& pattern,
 		case WRITE_PATTERN_RANDOM_HAMMING:
 		case WRITE_PATTERN_STATISTICAL:
 		default:
-			/* Default: assume SET needed (could be extended with probabilities) */
+			/* Default: assume target=1, current=0 (true SET needed) */
 			return SET;
 	}
 }
 
 TransitionType SubArray::DetermineResetPhaseOperation(const WritePattern& pattern, int globalBitPosition) {
-	/* In RESET phase, determine what this bit needs to do:
-	 * - If bit needs 1→0 transition: actual RESET operation
-	 * - Otherwise: redundant RESET operation (fast, tight distribution)
+	/* RESET phase: Apply -V bias only to cells where targetBit = 0
+	 * targetBit = 1: NONE (no bias applied)
+	 * targetBit = 0 + currentBit = 1: RESET (1→0, LRS→HRS, true RESET)
+	 * targetBit = 0 + currentBit = 0: REDUNDANT_RESET (0→0, reinforcing bias to HRS)
 	 */
 	
 	switch (pattern.patternType) {
@@ -1057,23 +1074,28 @@ TransitionType SubArray::DetermineResetPhaseOperation(const WritePattern& patter
 			bool currentBit = (pattern.currentData >> globalBitPosition) & 1;
 			bool targetBit = (pattern.targetData >> globalBitPosition) & 1;
 			
-			if (currentBit == true && targetBit == false) {
-				return RESET; /* 1→0: actual RESET operation needed */
+			if (targetBit == true) {
+				return NONE; /* No -V bias applied in RESET phase */
+			}
+			/* targetBit == false: -V bias applied */
+			if (currentBit == true) {
+				return RESET; /* 1→0: true RESET operation (LRS→HRS) */
 			} else {
-				return REDUNDANT_RESET; /* No RESET needed: redundant operation */
+				return REDUNDANT_RESET; /* 0→0: reinforcing RESET bias (already HRS) */
 			}
 		}
 		
 		case WRITE_PATTERN_WORST_CASE: {
 			switch (pattern.worstCaseMode) {
 				case WORST_CASE_ALL_RESET:
-					return RESET; /* Force all bits to do actual RESET */
+					return RESET; /* Force all bits to do true RESET (1→0) */
 				case WORST_CASE_ALL_SET:
+					return NONE; /* All bits target=1, no -V bias in RESET phase */
 				case WORST_CASE_ALL_REDUNDANT:
-					return REDUNDANT_RESET; /* No RESET needed */
+					return REDUNDANT_RESET; /* All bits already at target, reinforcing bias */
 				case WORST_CASE_ALTERNATING:
-					/* Alternating pattern: every other bit needs RESET */
-					return (globalBitPosition % 2 == 1) ? RESET : REDUNDANT_RESET;
+					/* Alternating: target=0 for odd positions, target=1 for even */
+					return (globalBitPosition % 2 == 1) ? RESET : NONE;
 				default:
 					return RESET;
 			}
@@ -1082,7 +1104,7 @@ TransitionType SubArray::DetermineResetPhaseOperation(const WritePattern& patter
 		case WRITE_PATTERN_RANDOM_HAMMING:
 		case WRITE_PATTERN_STATISTICAL:
 		default:
-			/* Default: assume RESET needed (could be extended with probabilities) */
+			/* Default: assume target=0, current=1 (true RESET needed) */
 			return RESET;
 	}
 }
