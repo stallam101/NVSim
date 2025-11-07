@@ -627,10 +627,16 @@ void InputParameter::ReadInputParameterFromFile(const std::string & inputFile) {
 			sscanf(line, "-RedundantTransitionProbability: %lf", &writePattern.redundantTransitionProbability);
 			continue;
 		}
+		if (!strncmp("-EffectiveWordWidth:", line, strlen("-EffectiveWordWidth:"))) {
+			sscanf(line, "-EffectiveWordWidth: %d", &writePattern.effectiveWordWidth);
+			continue;
+		}
 	}
 	
-	/* Set effective word width from parsed wordWidth */
-	writePattern.effectiveWordWidth = (int)wordWidth;
+	/* Set effective word width from parsed wordWidth if not already specified */
+	if (writePattern.effectiveWordWidth == 64) {  // Default value from constructor
+		writePattern.effectiveWordWidth = (int)wordWidth;
+	}
 
 	fclose(fp);
 }
@@ -665,7 +671,7 @@ void InputParameter::PrintInputParameter() {
 		if (wordWidth % 8 == 0)
 			cout << " (" << wordWidth / 8 << "Bytes)" << endl;
 		else
-			cout << endl;
+			cout << " (" << (wordWidth + 7) / 8 << "Bytes, " << wordWidth % 8 << " bits)" << endl;
 	}
 	if (designTarget == RAM_chip && (cell->memCellType == SLCNAND || cell->memCellType == MLCNAND)) {
 		cout << "Page Size  : " << pageSize / 8 << "Bytes" << endl;

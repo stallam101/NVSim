@@ -1,0 +1,59 @@
+# RRAM Cell Parameters for Sierpinski Gasket Testing
+
+-MemCellType: memristor
+
+-CellArea (F^2): 4
+-CellAspectRatio: 1
+
+# Resistance values for RRAM states
+-ResistanceOnAtSetVoltage (ohm): 100000
+-ResistanceOffAtSetVoltage (ohm): 10000000
+-ResistanceOnAtResetVoltage (ohm): 100000
+-ResistanceOffAtResetVoltage (ohm): 10000000
+-ResistanceOnAtReadVoltage (ohm): 1000000
+-ResistanceOffAtReadVoltage (ohm): 10000000
+-ResistanceOnAtHalfResetVoltage (ohm): 500000
+
+# Capacitance values
+-CapacitanceOn (F): 1e-16
+-CapacitanceOff (F): 1e-16
+
+# Read operation parameters
+-ReadMode: current
+-ReadVoltage (V): 0.4
+-ReadPower (uW): 0.16
+
+# RESET operation parameters (1→0: LRS→HRS, slower for RRAM)
+-ResetMode: voltage
+-ResetVoltage (V): 2.0
+-ResetPulse (ns): 200
+-ResetEnergy (pJ): 0.6
+
+# SET operation parameters (0→1: HRS→LRS, faster for RRAM)
+-SetMode: voltage
+-SetVoltage (V): 2.0
+-SetPulse (ns): 200
+-SetEnergy (pJ): 0.6
+
+-AccessType: None
+-ReadFloating: false
+
+#==========================================
+# Stochastic Parameters for 3-Class Timing
+#==========================================
+-StochasticEnabled: true
+
+-SetPulseCountMean: 640
+-SetPulseCountStdDev: 5.0
+-SetPulseCountMin: 500
+-SetPulseCountMax: 700
+
+-ResetPulseCountMean: 600
+-ResetPulseCountStdDev: 5.0
+-ResetPulseCountMin: 500
+-ResetPulseCountMax: 700
+
+-RedundantPulseCountMean: 0
+-RedundantPulseCountStdDev: 0
+-RedundantPulseCountMin: 0
+-RedundantPulseCountMax: 0

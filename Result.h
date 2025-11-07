@@ -50,6 +50,7 @@ public:
 	/* Functions */
 	void print();
 	void printAsCache(Result &tagBank, CacheAccessMode cacheAccessMode);
+	void printMachineReadable();
 	void reset();
 	void printToCsvFile(ofstream &outputFile);
 	void printAsCacheToCsvFile(Result &tagBank, CacheAccessMode cacheAccessMode, ofstream &outputFile);

@@ -904,11 +904,17 @@ double SubArray::CalculateStochasticWriteLatency(double baseLatency) {
 	
 	/* Phase 3: Check if word-level pattern analysis is enabled */
 	if (inputParameter->writePattern.enabled && inputParameter->writePattern.patternType != WRITE_PATTERN_NONE) {
-		/* Calculate effective bit offset for this subarray within the word */
-		int bitOffset = 0; /* In a real system, this would be calculated from bank/subarray position */
+		/* FIXED: Process all bit ranges needed for effectiveWordWidth */
+		int bitsPerSubArray = numColumn / muxSenseAmp / muxOutputLev1 / muxOutputLev2;
+		double maxLatency = baseLatency;
 		
-		/* Use word-level stochastic calculation */
-		return CalculateWordStochasticWriteLatency(baseLatency, inputParameter->writePattern, bitOffset);
+		/* Iterate through all bit ranges to cover the full effective word width */
+		for (int bitOffset = 0; bitOffset < inputParameter->writePattern.effectiveWordWidth; bitOffset += bitsPerSubArray) {
+			double subarrayLatency = CalculateWordStochasticWriteLatency(baseLatency, inputParameter->writePattern, bitOffset);
+			maxLatency = std::max(maxLatency, subarrayLatency);
+		}
+		
+		return maxLatency;
 	}
 	
 	/* Legacy Phase 2: Cell-level stochastic timing (random sampling) */
@@ -951,6 +957,7 @@ TransitionType SubArray::DetermineTransitionType(bool currentBit, bool targetBit
 double SubArray::CalculateWordStochasticWriteLatency(double baseLatency, const WritePattern& pattern, int bitOffset) {
 	/* Determine the effective bits this SubArray handles */
 	int bitsPerSubArray = numColumn / muxSenseAmp / muxOutputLev1 / muxOutputLev2;
+	
 	
 	/* Ensure we don't exceed word width */
 	int effectiveBits = std::min(bitsPerSubArray, pattern.effectiveWordWidth - bitOffset);

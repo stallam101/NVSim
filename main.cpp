@@ -72,6 +72,7 @@ int main(int argc, char *argv[])
 {
 	cout << fixed << setprecision(3);
 	string inputFileName;
+	bool machineReadableOutput = false;
 
 	if (argc == 1) {
 		inputFileName = "nvsim.cfg";
@@ -79,10 +80,22 @@ int main(int argc, char *argv[])
 	} else if (argc == 2) {
 		inputFileName = argv[1];
 		cout << "User-defined configuration file (" << inputFileName << ") is loaded" << endl;
+	} else if (argc == 3) {
+		inputFileName = argv[1];
+		string flag = argv[2];
+		if (flag == "-MachineReadable" || flag == "-mr") {
+			machineReadableOutput = true;
+			// Suppress normal output for machine-readable mode
+			cout.setstate(ios_base::badbit);
+		} else {
+			cout << "[NVSIM Error]: Unknown flag: " << flag << endl;
+			exit(-1);
+		}
 	} else {
 		cout << "[NVSIM Error]: Please use the correct format as follows" << endl;
 		cout << "  Use the default configuration: " << argv[0] << endl;
 		cout << "  Use the customized configuration: " << argv[0] << " <.cfg file>"  << endl;
+		cout << "  Use machine-readable output: " << argv[0] << " <.cfg file> -MachineReadable" << endl;
 		exit(-1);
 	}
 	cout << endl;
@@ -441,14 +454,23 @@ int main(int argc, char *argv[])
 
 	if (inputParameter->optimizationTarget != full_exploration) {
 		if (numSolution > 0) {
-			if (inputParameter->designTarget == cache)
-				bestDataResults[inputParameter->optimizationTarget].printAsCache(bestTagResults[inputParameter->optimizationTarget], inputParameter->cacheAccessMode);
-			else
-				bestDataResults[inputParameter->optimizationTarget].print();
+			if (machineReadableOutput) {
+				// Re-enable cout for machine-readable output
+				cout.clear();
+				bestDataResults[inputParameter->optimizationTarget].printMachineReadable();
+			} else {
+				if (inputParameter->designTarget == cache)
+					bestDataResults[inputParameter->optimizationTarget].printAsCache(bestTagResults[inputParameter->optimizationTarget], inputParameter->cacheAccessMode);
+				else
+					bestDataResults[inputParameter->optimizationTarget].print();
+				cout << endl << "Finished!" << endl;
+			}
 		} else {
-			cout << "No valid solutions." << endl;
+			if (!machineReadableOutput) {
+				cout << "No valid solutions." << endl;
+				cout << endl << "Finished!" << endl;
+			}
 		}
-		cout << endl << "Finished!" << endl;
 	} else {
 		cout << endl << outputFileName << " generated successfully!" << endl;
 		if (inputParameter->isPruningEnabled) {

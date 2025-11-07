@@ -875,3 +875,50 @@ void Result::printAsCacheToCsvFile(Result &tagResult, CacheAccessMode cacheAcces
 		outputFile << endl;
 	}
 }
+
+void Result::printMachineReadable() {
+	// Output structured timing data for Python parsing
+	// Convert from seconds to nanoseconds for consistency
+	
+	double totalWriteLatencyNs = bank->writeLatency * 1e9;
+	
+	// For RRAM/PCRAM/memristor with two-phase architecture
+	if (cell->memCellType == PCRAM || cell->memCellType == FBRAM || cell->memCellType == memristor) {
+		
+		double setLatencyNs = bank->setLatency * 1e9;
+		double resetLatencyNs = bank->resetLatency * 1e9;
+		
+		cout << "TOTAL_WRITE_LATENCY_NS=" << (long long)totalWriteLatencyNs << endl;
+		cout << "SET_LATENCY_NS=" << (long long)setLatencyNs << endl;
+		cout << "RESET_LATENCY_NS=" << (long long)resetLatencyNs << endl;
+		
+		// Output energy values in picojoules
+		cout << "SET_ENERGY_PJ=" << (long long)(bank->setDynamicEnergy * 1e12) << endl;
+		cout << "RESET_ENERGY_PJ=" << (long long)(bank->resetDynamicEnergy * 1e12) << endl;
+		
+	} else {
+		// For other memory types, output general write latency
+		cout << "TOTAL_WRITE_LATENCY_NS=" << (long long)totalWriteLatencyNs << endl;
+		cout << "WRITE_ENERGY_PJ=" << (long long)(bank->writeDynamicEnergy * 1e12) << endl;
+	}
+	
+	// Output read timing for completeness
+	double readLatencyNs = bank->readLatency * 1e9;
+	cout << "READ_LATENCY_NS=" << (long long)readLatencyNs << endl;
+	cout << "READ_ENERGY_PJ=" << (long long)(bank->readDynamicEnergy * 1e12) << endl;
+	
+	// Output area and leakage
+	cout << "AREA_UM2=" << (long long)(bank->area * 1e12) << endl;  // Convert m^2 to um^2
+	cout << "LEAKAGE_POWER_MW=" << (long long)(bank->leakage * 1e3) << endl;  // Convert W to mW
+	
+	// Output configuration info
+	cout << "MEMORY_TYPE=";
+	if (cell->memCellType == PCRAM) cout << "PCRAM";
+	else if (cell->memCellType == FBRAM) cout << "FBRAM";
+	else if (cell->memCellType == memristor) cout << "RRAM";
+	else if (cell->memCellType == MRAM) cout << "MRAM";
+	else if (cell->memCellType == SLCNAND) cout << "SLCNAND";
+	else if (cell->memCellType == DRAM) cout << "DRAM";
+	else cout << "UNKNOWN";
+	cout << endl;
+}

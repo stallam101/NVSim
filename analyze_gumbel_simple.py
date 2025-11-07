@@ -1,8 +1,4 @@
-#!/usr/bin/env python3
-"""
-Simple Gumbel Distribution Analysis for Phase 3 Word-Level Modeling
-Analyzes the word-level completion times to validate Gumbel emergence
-"""
+
 
 import re
 import math
@@ -10,13 +6,12 @@ import subprocess
 import sys
 
 def run_nvsim_sample():
-    """Run a single NVSim sample and extract SET latency"""
     try:
         result = subprocess.run(['./nvsim', 'sample_word_level_worst_case.cfg'], 
                               capture_output=True, text=True, timeout=30)
         
         if result.returncode == 0:
-            # Extract SET Latency from output
+
             set_match = re.search(r'- SET Latency\s*=\s*([0-9.]+)ns', result.stdout)
             if set_match:
                 return float(set_match.group(1))
@@ -27,7 +22,6 @@ def run_nvsim_sample():
         return None
 
 def collect_samples(num_samples=100):
-    """Collect word-level completion time samples"""
     print(f"Collecting {num_samples} word-level completion time samples...")
     samples = []
     
@@ -45,7 +39,6 @@ def collect_samples(num_samples=100):
     return samples
 
 def analyze_gumbel_fit(samples):
-    """Analyze samples for Gumbel distribution fit"""
     if len(samples) < 10:
         print("ERROR: Need at least 10 samples for analysis")
         return
@@ -53,7 +46,7 @@ def analyze_gumbel_fit(samples):
     n = len(samples)
     mean = sum(samples) / n
     
-    # Calculate standard deviation
+
     variance = sum((x - mean)**2 for x in samples) / (n - 1)
     stddev = math.sqrt(variance)
     
@@ -68,25 +61,25 @@ def analyze_gumbel_fit(samples):
     print(f"Max: {max_val:.3f} ns")
     print(f"Range: {max_val - min_val:.3f} ns")
     
-    # Gumbel distribution parameter estimation
-    # For Gumbel distribution: μ (location), β (scale)
-    # mean = μ + γ*β where γ ≈ 0.5772 (Euler-Mascheroni constant)
-    # stddev = π*β/√6
+
+
+
+
     
     euler_gamma = 0.5772156649
     pi = 3.14159265359
     
-    # Estimate scale parameter β from standard deviation
+
     beta_est = stddev * math.sqrt(6) / pi
     
-    # Estimate location parameter μ from mean
+
     mu_est = mean - euler_gamma * beta_est
     
     print(f"\n=== Gumbel Distribution Parameter Estimates ===")
     print(f"Location parameter (μ): {mu_est:.3f} ns")
     print(f"Scale parameter (β): {beta_est:.3f} ns")
     
-    # Verify estimates
+
     theoretical_mean = mu_est + euler_gamma * beta_est
     theoretical_stddev = pi * beta_est / math.sqrt(6)
     
@@ -99,11 +92,11 @@ def analyze_gumbel_fit(samples):
     print(f"Empirical std dev: {stddev:.3f} ns")
     print(f"Std dev error: {abs(theoretical_stddev - stddev):.3f} ns ({abs(theoretical_stddev - stddev)/stddev*100:.1f}%)")
     
-    # Distribution analysis
+
     print(f"\n=== Distribution Shape Analysis ===")
     sorted_samples = sorted(samples)
     
-    # Calculate percentiles
+
     percentiles = [10, 25, 50, 75, 90, 95, 99]
     print("Empirical percentiles:")
     for p in percentiles:
@@ -112,7 +105,7 @@ def analyze_gumbel_fit(samples):
         if idx >= n: idx = n - 1
         print(f"  {p}%: {sorted_samples[idx]:.3f} ns")
     
-    # Count unique values to assess stochastic behavior
+
     unique_values = len(set(samples))
     print(f"\nUnique values: {unique_values}/{n} ({unique_values/n*100:.1f}%)")
     
@@ -136,11 +129,11 @@ def main():
     print("Configuration: All-SET pattern (worst-case scenario)")
     print("Expected: Gumbel distribution emergence\n")
     
-    # Check if nvsim exists
+
     try:
         result = subprocess.run(['./nvsim', '--version'], capture_output=True, timeout=5)
     except:
-        pass  # Version check not critical
+        pass
     
     try:
         subprocess.run(['ls', 'sample_word_level_worst_case.cfg'], check=True, capture_output=True)
@@ -149,24 +142,24 @@ def main():
         print("Please run the Phase 3 implementation first.")
         sys.exit(1)
     
-    # Collect samples
-    samples = collect_samples(50)  # Start with 50 for faster testing
+
+    samples = collect_samples(50)
     
     if len(samples) < 10:
         print("ERROR: Not enough valid samples collected")
         sys.exit(1)
     
-    # Analyze for Gumbel distribution
+
     results = analyze_gumbel_fit(samples)
     
-    # Final assessment
+
     print(f"\n=== Final Assessment ===")
     if results['unique_ratio'] > 0.3:
         print("✅ Sufficient stochastic variation observed")
         print("✅ Word-level MAX operation functioning")
         
-        # Check if parameters are reasonable for Gumbel
-        if 5 < results['beta_est'] < 20:  # Reasonable scale for nanosecond timing
+
+        if 5 < results['beta_est'] < 20:
             print("✅ Gumbel scale parameter in reasonable range")
             print("🎯 Strong evidence for Gumbel distribution emergence!")
         else:
