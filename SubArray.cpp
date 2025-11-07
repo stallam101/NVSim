@@ -906,6 +906,13 @@ double SubArray::CalculateStochasticWriteLatency(double baseLatency) {
 	if (inputParameter->writePattern.enabled && inputParameter->writePattern.patternType != WRITE_PATTERN_NONE) {
 		/* FIXED: Process all bit ranges needed for effectiveWordWidth */
 		int bitsPerSubArray = numColumn / muxSenseAmp / muxOutputLev1 / muxOutputLev2;
+		
+		/* ECC COMPATIBILITY: Override for simultaneous processing of entire ECC word */
+		if (inputParameter->writePattern.effectiveWordWidth <= numColumn) {
+			/* Single SubArray can handle entire ECC word - process all bits simultaneously */
+			bitsPerSubArray = inputParameter->writePattern.effectiveWordWidth;
+		}
+		
 		double maxLatency = baseLatency;
 		
 		/* Iterate through all bit ranges to cover the full effective word width */
@@ -957,6 +964,12 @@ TransitionType SubArray::DetermineTransitionType(bool currentBit, bool targetBit
 double SubArray::CalculateWordStochasticWriteLatency(double baseLatency, const WritePattern& pattern, int bitOffset) {
 	/* Determine the effective bits this SubArray handles */
 	int bitsPerSubArray = numColumn / muxSenseAmp / muxOutputLev1 / muxOutputLev2;
+	
+	/* ECC COMPATIBILITY: Override for simultaneous processing of entire ECC word */
+	if (pattern.effectiveWordWidth <= numColumn) {
+		/* Single SubArray can handle entire ECC word - process all bits simultaneously */
+		bitsPerSubArray = pattern.effectiveWordWidth;
+	}
 	
 	
 	/* Ensure we don't exceed word width */
