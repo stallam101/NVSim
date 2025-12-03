@@ -3,6 +3,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import seaborn as sns
 from pathlib import Path
 import json
 import re
@@ -98,6 +99,8 @@ class SierpinskiVariantVisualizer:
         positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
         variant_order = ['byte0_g0', 'byte0_g1', 'byte1_g0', 'byte1_g1']
         
+        # Individual auto-scaling for each variant (like visualize_sierpinski.py)
+        
         for idx, variant in enumerate(variant_order):
             row, col = positions[idx]
             ax = axes[row, col]
@@ -129,18 +132,21 @@ class SierpinskiVariantVisualizer:
             elif visualization_type == "latency" and 'latency_matrix' in data:
                 matrix = data['latency_matrix']
                 
-                # Handle NaN values and create reasonable color scale
+                # Use same approach as visualize_sierpinski.py - automatic scaling
+                
+                # Create seaborn heatmap for natural scaling like visualize_sierpinski.py
+                sns.heatmap(matrix, ax=ax, cmap='viridis', square=True, 
+                           cbar_kws={'label': 'Write Latency (ns)', 'shrink': 0.8})
+                
+                # Add statistics for this variant
                 valid_values = matrix[~np.isnan(matrix) & (matrix > 0)]
                 if len(valid_values) > 0:
-                    vmin, vmax = np.percentile(valid_values, [5, 95])
-                    im = ax.imshow(matrix, cmap='viridis', vmin=vmin, vmax=vmax)
-                    
-                    # Add colorbar
-                    cbar = plt.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-                    cbar.set_label('Latency (ns)')
-                else:
-                    ax.text(0.5, 0.5, 'No valid data', ha='center', va='center', 
-                           transform=ax.transAxes)
+                    stats_text = f"Range: {np.min(valid_values):.0f}-{np.max(valid_values):.0f}ns\n"
+                    stats_text += f"Mean: {np.mean(valid_values):.0f}ns\n"
+                    stats_text += f"Valid: {len(valid_values):,}"
+                    ax.text(0.02, 0.98, stats_text, transform=ax.transAxes,
+                           verticalalignment='top', fontsize=8,
+                           bbox=dict(boxstyle='round', facecolor='white', alpha=0.8))
             
             # Set labels and title
             ax.set_title(self.variant_descriptions[variant], fontsize=10, fontweight='bold')

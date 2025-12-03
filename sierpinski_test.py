@@ -216,6 +216,66 @@ class SierpinskiTester:
                 'success': False,
                 'error': f"Unexpected error: {str(e)}"
             }
+
+    def run_nvsim_multiple(self, config_file: str, num_runs: int = 40, timeout: int = 30) -> Dict:
+        """
+        Run NVSim multiple times and return minimum write latency for noise reduction.
+        
+        Args:
+            config_file: Path to NVSim configuration
+            num_runs: Number of iterations to run (default: 40)
+            timeout: Maximum execution time per run
+            
+        Returns:
+            Dictionary with minimum timing and all measurements
+        """
+        all_measurements = []
+        successful_runs = 0
+        
+        logger.debug(f"Running NVSim {num_runs} times for noise reduction...")
+        
+        for run_id in range(num_runs):
+            try:
+                # Run single NVSim execution
+                result = self.run_nvsim(config_file, timeout)
+                
+                if result['success'] and result['write_latency_ns'] is not None:
+                    all_measurements.append(result['write_latency_ns'])
+                    successful_runs += 1
+                else:
+                    logger.warning(f"Run {run_id+1}/{num_runs} failed: {result.get('error', 'Unknown error')}")
+                    
+            except Exception as e:
+                logger.warning(f"Run {run_id+1}/{num_runs} exception: {e}")
+        
+        if successful_runs == 0:
+            return {
+                'success': False,
+                'error': f"All {num_runs} runs failed",
+                'measurements': []
+            }
+        
+        if successful_runs < num_runs * 0.8:  # Warn if less than 80% success rate
+            logger.warning(f"Low success rate: {successful_runs}/{num_runs} ({successful_runs/num_runs*100:.1f}%)")
+        
+        # Calculate statistics
+        min_latency = min(all_measurements)
+        max_latency = max(all_measurements)
+        mean_latency = sum(all_measurements) / len(all_measurements)
+        std_latency = (sum((x - mean_latency)**2 for x in all_measurements) / len(all_measurements))**0.5
+        
+        logger.debug(f"✅ {successful_runs}/{num_runs} successful runs, latency range: {min_latency:.1f} - {max_latency:.1f} ns")
+        
+        return {
+            'success': True,
+            'min_latency_ns': min_latency,      # This becomes our final result
+            'max_latency_ns': max_latency,
+            'mean_latency_ns': mean_latency,
+            'std_latency_ns': std_latency,
+            'successful_runs': successful_runs,
+            'all_measurements': all_measurements,
+            'noise_reduction_factor': max_latency / min_latency if min_latency > 0 else 1.0
+        }
     
     def _parse_machine_readable_output(self, stdout: str) -> Dict[str, float]:
         timing_data = {}
@@ -336,32 +396,52 @@ class SierpinskiBatchProcessor:
     def generate_all_message_pairs(self) -> List[Tuple[int, int]]:
         return [(src, dst) for src in range(256) for dst in range(256)]
     
-    def process_single_batch(self, message_pairs: List[Tuple[int, int]], batch_id: int) -> Dict:
+    def process_single_batch(self, message_pairs: List[Tuple[int, int]], batch_id: int, 
+                            use_40_run: bool = False, num_runs: int = 40) -> Dict:
         batch_results = {}
         
         for src_msg, dst_msg in message_pairs:
             try:
-
+                # Generate codewords
                 cw0 = self.tester.encode_message(src_msg)
                 cw1 = self.tester.encode_message(dst_msg)
                 
-
+                # Create test configuration
                 config_file = self.tester.create_test_config(cw0, cw1, f"batch_{batch_id}_{src_msg}_{dst_msg}")
-                result = self.tester.run_nvsim(config_file, timeout=60)
                 
-                if result['success']:
-                    latency = result['write_latency_ns'] or 0.0
-                    batch_results[(src_msg, dst_msg)] = latency
+                if use_40_run:
+                    # NEW: Multi-run approach for noise reduction
+                    result = self.tester.run_nvsim_multiple(config_file, num_runs=num_runs, timeout=60)
                     
-
-                    transition = self.tester.analyze_transition(cw0, cw1)
-                    logger.debug(f"msg {src_msg}→{dst_msg}: {transition['set_transitions']}S, "
-                               f"{transition['reset_transitions']}R, {transition['redundant_ops']}N → {latency:.3f}ns")
+                    if result['success']:
+                        # Store minimum latency (key change!)
+                        batch_results[(src_msg, dst_msg)] = result['min_latency_ns']
+                        
+                        # Log noise reduction info
+                        transition = self.tester.analyze_transition(cw0, cw1)
+                        logger.debug(f"msg {src_msg}→{dst_msg}: {transition['set_transitions']}S, "
+                                   f"{transition['reset_transitions']}R, {transition['redundant_ops']}N → "
+                                   f"min={result['min_latency_ns']:.1f}ns (noise×{result['noise_reduction_factor']:.1f})")
+                    else:
+                        logger.warning(f"40-run failed for {src_msg}→{dst_msg}: {result['error']}")
+                        batch_results[(src_msg, dst_msg)] = None
                 else:
-                    logger.warning(f"Failed transition {src_msg}→{dst_msg}: {result['error']}")
-                    batch_results[(src_msg, dst_msg)] = None
+                    # Original single-run approach
+                    result = self.tester.run_nvsim(config_file, timeout=60)
                     
-
+                    if result['success']:
+                        latency = result['write_latency_ns'] or 0.0
+                        batch_results[(src_msg, dst_msg)] = latency
+                        
+                        # Log transition info
+                        transition = self.tester.analyze_transition(cw0, cw1)
+                        logger.debug(f"msg {src_msg}→{dst_msg}: {transition['set_transitions']}S, "
+                                   f"{transition['reset_transitions']}R, {transition['redundant_ops']}N → {latency:.3f}ns")
+                    else:
+                        logger.warning(f"Failed transition {src_msg}→{dst_msg}: {result['error']}")
+                        batch_results[(src_msg, dst_msg)] = None
+                
+                # Clean up temporary files
                 Path(config_file).unlink(missing_ok=True)
                 
             except Exception as e:
@@ -493,7 +573,13 @@ def process_batch_worker(message_pairs, batch_id):
 
     tester = SierpinskiTester()
     processor = SierpinskiBatchProcessor(tester)
-    return processor.process_single_batch(message_pairs, batch_id)
+    return processor.process_single_batch(message_pairs, batch_id, use_40_run=False)
+
+def process_batch_worker_40run(message_pairs, batch_id, num_runs=40):
+
+    tester = SierpinskiTester()
+    processor = SierpinskiBatchProcessor(tester)
+    return processor.process_single_batch(message_pairs, batch_id, use_40_run=True, num_runs=num_runs)
 
 
 def convert_to_matrix(all_results):
@@ -508,7 +594,7 @@ def convert_to_matrix(all_results):
     return results_matrix
 
 
-def run_parallel_sierpinski_generation(max_workers=None):
+def run_parallel_sierpinski_generation(max_workers=None, use_40_run: bool = False, num_runs: int = 40):
     
     if max_workers is None:
         max_workers = min(multiprocessing.cpu_count(), 8)
@@ -520,17 +606,27 @@ def run_parallel_sierpinski_generation(max_workers=None):
     batch_size = max(1000, len(all_pairs) // max_workers)
     batches = [all_pairs[i:i+batch_size] for i in range(0, len(all_pairs), batch_size)]
     
-    logger.info(f"Starting parallel generation: {len(batches)} batches, {max_workers} workers")
+    if use_40_run:
+        logger.info(f"Starting {num_runs}-run parallel generation: {len(batches)} batches, {max_workers} workers")
+        logger.info(f"Each transition will be simulated {num_runs} times, using minimum latency")
+    else:
+        logger.info(f"Starting parallel generation: {len(batches)} batches, {max_workers} workers")
     
     all_results = {}
     completed_batches = 0
     
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
 
-        future_to_batch = {
-            executor.submit(process_batch_worker, batch, batch_id): batch_id 
-            for batch_id, batch in enumerate(batches)
-        }
+        if use_40_run:
+            future_to_batch = {
+                executor.submit(process_batch_worker_40run, batch, batch_id, num_runs): batch_id 
+                for batch_id, batch in enumerate(batches)
+            }
+        else:
+            future_to_batch = {
+                executor.submit(process_batch_worker, batch, batch_id): batch_id 
+                for batch_id, batch in enumerate(batches)
+            }
         
 
         for future in as_completed(future_to_batch):
@@ -541,8 +637,12 @@ def run_parallel_sierpinski_generation(max_workers=None):
                 completed_batches += 1
                 
                 progress = (completed_batches / len(batches)) * 100
-                logger.info(f"Batch {batch_id} complete. Progress: {progress:.1f}% "
-                          f"({len(all_results)}/65536 transitions)")
+                if use_40_run:
+                    logger.info(f"{num_runs}-run batch {batch_id} complete. Progress: {progress:.1f}% "
+                              f"({len(all_results)}/65536 transitions)")
+                else:
+                    logger.info(f"Batch {batch_id} complete. Progress: {progress:.1f}% "
+                              f"({len(all_results)}/65536 transitions)")
                 
             except Exception as e:
                 logger.error(f"Batch {batch_id} failed: {e}")
@@ -550,9 +650,13 @@ def run_parallel_sierpinski_generation(max_workers=None):
     return convert_to_matrix(all_results)
 
 
-def run_full_sierpinski_generation():
+def run_full_sierpinski_generation(use_40_run: bool = False, num_runs: int = 40):
     
-    logger.info("🚀 Starting Phase 2: Full Sierpinski Dataset Generation")
+    if use_40_run:
+        logger.info(f"🚀 Starting Phase 2: {num_runs}-Run Sierpinski Dataset Generation")
+        logger.info(f"This will run each transition {num_runs} times and use minimum latency")
+    else:
+        logger.info("🚀 Starting Phase 2: Standard Sierpinski Dataset Generation")
     
 
     progress_mgr = SierpinskiProgressManager()
@@ -561,7 +665,7 @@ def run_full_sierpinski_generation():
     try:
 
         logger.info("Starting parallel batch processing...")
-        results_matrix = run_parallel_sierpinski_generation(max_workers=8)
+        results_matrix = run_parallel_sierpinski_generation(max_workers=8, use_40_run=use_40_run, num_runs=num_runs)
         
 
         logger.info("Saving complete dataset...")
@@ -569,6 +673,7 @@ def run_full_sierpinski_generation():
             'generation_time': time.time(),
             'total_transitions': 65536,
             'nvsim_version': 'Phase 3 Stochastic',
+            'mode': '40-run' if use_40_run else 'single-run',
             'ecc_parameters': {
                 'P_matrix_shape': '16x5',
                 'b_vector_shape': '5x1',
@@ -576,9 +681,19 @@ def run_full_sierpinski_generation():
             }
         }
         
-        dataset_file = data_mgr.save_complete_dataset(results_matrix, metadata)
+        if use_40_run:
+            metadata['noise_reduction'] = {
+                'runs_per_transition': num_runs,
+                'selection_method': 'minimum_latency',
+                'purpose': 'reveal_hamming_weight_checkerboard_patterns'
+            }
         
-        logger.info("✅ Phase 2 Complete! Sierpinski gasket generation finished successfully.")
+        data_mgr.save_complete_dataset(results_matrix, metadata)
+        
+        if use_40_run:
+            logger.info(f"✅ Phase 2 Complete! {num_runs}-run Sierpinski gasket generation finished successfully.")
+        else:
+            logger.info("✅ Phase 2 Complete! Sierpinski gasket generation finished successfully.")
         return results_matrix
         
     except Exception as e:
@@ -604,8 +719,45 @@ def main():
                 print("Cancelled.")
                 return 0
             
-            results_matrix = run_full_sierpinski_generation()
+            results_matrix = run_full_sierpinski_generation(use_40_run=False)
             print(f"✅ Phase 2 Complete! Results shape: {results_matrix.shape}")
+            return 0
+            
+        elif len(sys.argv) > 1 and sys.argv[1].startswith("--run"):
+
+            # Parse number of runs: --run=N or --run N
+            num_runs = 40  # default
+            if "=" in sys.argv[1]:
+                try:
+                    num_runs = int(sys.argv[1].split("=")[1])
+                except ValueError:
+                    print("❌ Invalid run count format. Use --run=N where N is a number")
+                    return 1
+            elif len(sys.argv) > 2:
+                try:
+                    num_runs = int(sys.argv[2])
+                except ValueError:
+                    print("❌ Invalid run count. Use --run N where N is a number")
+                    return 1
+            
+            if num_runs < 1 or num_runs > 100:
+                print("❌ Number of runs must be between 1 and 100")
+                return 1
+            
+            print(f"🎯 Starting Phase 2: {num_runs}-Run Sierpinski Dataset Generation")
+            print(f"This will run each transition {num_runs} times (minimum latency approach)")
+            if num_runs >= 20:
+                print("Expected to reveal hamming weight checkerboard patterns...")
+            print("This will take significantly longer than standard generation!")
+            
+            confirm = input("Continue? (y/N): ").strip().lower()
+            if confirm != 'y':
+                print("Cancelled.")
+                return 0
+            
+            results_matrix = run_full_sierpinski_generation(use_40_run=True, num_runs=num_runs)
+            print(f"✅ Phase 2 {num_runs}-Run Complete! Results shape: {results_matrix.shape}")
+            print("🔍 Run visualize_sierpinski.py to analyze checkerboard patterns")
             return 0
         
         elif len(sys.argv) > 1 and sys.argv[1] == "--test-batch":
@@ -619,7 +771,7 @@ def main():
             test_pairs = [(i, j) for i in range(4) for j in range(4)]
             print(f"Testing {len(test_pairs)} transitions...")
             
-            batch_results = processor.process_single_batch(test_pairs, 0)
+            batch_results = processor.process_single_batch(test_pairs, 0, use_40_run=False)
             print(f"✅ Batch test complete: {len(batch_results)} results")
             
 
@@ -630,12 +782,46 @@ def main():
                     print(f"  msg {src}→{dst}: FAILED")
             
             return 0
+            
+        elif len(sys.argv) > 1 and sys.argv[1] == "--test-multi":
+
+            # Parse number of runs for testing (default 5 for quick test)
+            test_runs = 5
+            if len(sys.argv) > 2:
+                try:
+                    test_runs = int(sys.argv[2])
+                except ValueError:
+                    print("❌ Invalid run count for testing. Use --test-multi N")
+                    return 1
+            
+            print(f"🧪 Testing {test_runs}-run mode with small subset...")
+            
+            tester = SierpinskiTester()
+            processor = SierpinskiBatchProcessor(tester)
+            
+
+            test_pairs = [(0, 1), (1, 2), (2, 3)]
+            print(f"Testing {len(test_pairs)} transitions with {test_runs}-run mode...")
+            
+            batch_results = processor.process_single_batch(test_pairs, 0, use_40_run=True, num_runs=test_runs)
+            print(f"✅ {test_runs}-run test complete: {len(batch_results)} results")
+            
+
+            for (src, dst), latency in batch_results.items():
+                if latency is not None:
+                    print(f"  msg {src}→{dst}: {latency:.3f}ns (minimum of {test_runs} runs)")
+                else:
+                    print(f"  msg {src}→{dst}: FAILED")
+            
+            return 0
         
         else:
 
             print("📋 Running Phase 1 validation tests...")
             print("Use --full for complete dataset generation")
+            print("Use --run=N or --run N for N-run noise reduction approach")
             print("Use --test-batch for batch processing test")
+            print("Use --test-multi N for testing multi-run mode")
             print()
             
 
@@ -653,7 +839,7 @@ def main():
             
             print()
             print("✅ Phase 1 validation completed successfully!")
-            print("💡 Ready for Phase 2! Run with --full to generate complete dataset")
+            print("💡 Ready for Phase 2! Run with --full or --run=N to generate complete dataset")
             return 0
         
     except Exception as e:

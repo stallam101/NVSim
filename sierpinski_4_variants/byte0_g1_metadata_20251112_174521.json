@@ -1,0 +1,17 @@
+{
+  "total_transitions": 65536,
+  "successful_transitions": 65536,
+  "generation_time": "2025-11-12T17:45:21.840891",
+  "variant_name": "byte0_g1",
+  "byte_index": 0,
+  "global_state": 1,
+  "type_mapping": {
+    "NONE": 0,
+    "UNIPOLAR": 1,
+    "BIPOLAR": 2
+  },
+  "files": {
+    "latency_matrix": "byte0_g1_latency_20251112_174521.npy",
+    "transition_matrix": "byte0_g1_transitions_20251112_174521.npy"
+  }
+}

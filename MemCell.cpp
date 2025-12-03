@@ -60,17 +60,19 @@ static int SampleTruncatedNormal(double mean, double stddev, int minVal, int max
 	int sample;
 	int attempts = 0;
 	const int maxAttempts = 100; /* Prevent infinite loops */
+
+	sample = (int)round(distribution(gen));
 	
-	do {
+	/*do {
 		sample = (int)round(distribution(gen));
 		attempts++;
 		if (attempts >= maxAttempts) {
-			/* Fallback to bounds if distribution is too extreme */
+			Fallback to bounds if distribution is too extreme
 			sample = (sample < minVal) ? minVal : sample;
 			sample = (sample > maxVal) ? maxVal : sample;
 			break;
 		}
-	} while (sample < minVal || sample > maxVal);
+	} while (sample < minVal || sample > maxVal); */
 	
 	return sample;
 }

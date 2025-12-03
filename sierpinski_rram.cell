@@ -44,12 +44,12 @@
 -StochasticEnabled: true
 
 -SetPulseCountMean: 640
--SetPulseCountStdDev: 5.0
+-SetPulseCountStdDev: 100
 -SetPulseCountMin: 500
 -SetPulseCountMax: 700
 
 -ResetPulseCountMean: 600
--ResetPulseCountStdDev: 5.0
+-ResetPulseCountStdDev: 100
 -ResetPulseCountMin: 500
 -ResetPulseCountMax: 700
 
