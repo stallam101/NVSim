@@ -20,10 +20,21 @@ logger = logging.getLogger(__name__)
 
 class SierpinskiTester:
     
-    def __init__(self):
+    def __init__(self, distribution_type="normal"):
         self.nvsim_executable = "./nvsim"
-        self.base_config = "sierpinski_test.cfg"
-        self.cell_file = "sierpinski_rram.cell"
+        self.distribution_type = distribution_type
+        
+        # Select configuration files based on distribution type
+        if distribution_type == "negative-binomial":
+            self.base_config = "sierpinski_test_negative_binomial.cfg"
+            self.cell_file = "sierpinski_rram_negative_binomial.cell"
+        elif distribution_type == "gamma":
+            self.base_config = "sierpinski_test_gamma.cfg"
+            self.cell_file = "sierpinski_rram_gamma.cell"
+        else:  # normal distribution (default)
+            self.base_config = "sierpinski_test.cfg"
+            self.cell_file = "sierpinski_rram.cell"
+            
         self.p_matrix_file = "P_matrix.csv"
         self.b_vector_file = "b_vector.csv"
         self.results_dir = Path("results")
@@ -569,15 +580,15 @@ class SierpinskiDataManager:
         }
 
 
-def process_batch_worker(message_pairs, batch_id):
+def process_batch_worker(message_pairs, batch_id, distribution_type="normal"):
 
-    tester = SierpinskiTester()
+    tester = SierpinskiTester(distribution_type)
     processor = SierpinskiBatchProcessor(tester)
     return processor.process_single_batch(message_pairs, batch_id, use_40_run=False)
 
-def process_batch_worker_40run(message_pairs, batch_id, num_runs=40):
+def process_batch_worker_40run(message_pairs, batch_id, num_runs=40, distribution_type="normal"):
 
-    tester = SierpinskiTester()
+    tester = SierpinskiTester(distribution_type)
     processor = SierpinskiBatchProcessor(tester)
     return processor.process_single_batch(message_pairs, batch_id, use_40_run=True, num_runs=num_runs)
 
@@ -593,13 +604,35 @@ def convert_to_matrix(all_results):
             
     return results_matrix
 
+def print_usage():
+    """Print usage information for the script"""
+    print("\n📖 USAGE:")
+    print("python sierpinski_test.py <DISTRIBUTION_TYPE> [COMMAND] [OPTIONS]")
+    print()
+    print("📊 DISTRIBUTION TYPES (mandatory first argument):")
+    print("  --normal             Use normal distribution (original)")
+    print("  --negative-binomial  Use negative binomial distribution (right-skewed)")
+    print("  --gamma              Use gamma distribution (Tyler's fitted parameters)")
+    print()
+    print("🔧 COMMANDS:")
+    print("  --full               Generate complete 65,536 transition dataset")
+    print("  --run=N              Generate dataset with N runs per transition")
+    print("  --test-batch         Test batch processing (16 transitions)")
+    print("  --test-multi N       Test multi-run mode (3 transitions, N runs)")
+    print()
+    print("💡 EXAMPLES:")
+    print("  python sierpinski_test.py --normal --test-batch")
+    print("  python sierpinski_test.py --negative-binomial --full")
+    print("  python sierpinski_test.py --gamma --run=40")
+    print("  python sierpinski_test.py --gamma --test-multi 5")
 
-def run_parallel_sierpinski_generation(max_workers=None, use_40_run: bool = False, num_runs: int = 40):
+
+def run_parallel_sierpinski_generation(max_workers=None, use_40_run: bool = False, num_runs: int = 40, distribution_type: str = "normal"):
     
     if max_workers is None:
         max_workers = min(multiprocessing.cpu_count(), 8)
     
-    processor = SierpinskiBatchProcessor(SierpinskiTester())
+    processor = SierpinskiBatchProcessor(SierpinskiTester(distribution_type))
     all_pairs = processor.generate_all_message_pairs()
     
 
@@ -619,12 +652,12 @@ def run_parallel_sierpinski_generation(max_workers=None, use_40_run: bool = Fals
 
         if use_40_run:
             future_to_batch = {
-                executor.submit(process_batch_worker_40run, batch, batch_id, num_runs): batch_id 
+                executor.submit(process_batch_worker_40run, batch, batch_id, num_runs, distribution_type): batch_id 
                 for batch_id, batch in enumerate(batches)
             }
         else:
             future_to_batch = {
-                executor.submit(process_batch_worker, batch, batch_id): batch_id 
+                executor.submit(process_batch_worker, batch, batch_id, distribution_type): batch_id 
                 for batch_id, batch in enumerate(batches)
             }
         
@@ -650,7 +683,7 @@ def run_parallel_sierpinski_generation(max_workers=None, use_40_run: bool = Fals
     return convert_to_matrix(all_results)
 
 
-def run_full_sierpinski_generation(use_40_run: bool = False, num_runs: int = 40):
+def run_full_sierpinski_generation(use_40_run: bool = False, num_runs: int = 40, distribution_type: str = "normal"):
     
     if use_40_run:
         logger.info(f"🚀 Starting Phase 2: {num_runs}-Run Sierpinski Dataset Generation")
@@ -665,7 +698,7 @@ def run_full_sierpinski_generation(use_40_run: bool = False, num_runs: int = 40)
     try:
 
         logger.info("Starting parallel batch processing...")
-        results_matrix = run_parallel_sierpinski_generation(max_workers=8, use_40_run=use_40_run, num_runs=num_runs)
+        results_matrix = run_parallel_sierpinski_generation(max_workers=8, use_40_run=use_40_run, num_runs=num_runs, distribution_type=distribution_type)
         
 
         logger.info("Saving complete dataset...")
@@ -708,8 +741,18 @@ def main():
         print("🔬 Sierpinski Gasket NVSim Tester")
         print("=" * 50)
         
-
-        if len(sys.argv) > 1 and sys.argv[1] == "--full":
+        # Check if first argument is distribution type, otherwise default to normal
+        distribution_type = "--normal"  # Default
+        remaining_args = sys.argv[1:] if len(sys.argv) > 1 else []
+        
+        # If first argument is a distribution type, use it and shift remaining args
+        if len(sys.argv) > 1 and sys.argv[1] in ["--normal", "--negative-binomial", "--gamma"]:
+            distribution_type = sys.argv[1]
+            remaining_args = sys.argv[2:] if len(sys.argv) > 2 else []
+            
+        print(f"📊 Distribution Type: {distribution_type[2:].replace('-', ' ').title()}")
+        
+        if len(remaining_args) > 0 and remaining_args[0] == "--full":
 
             print("🚀 Starting Phase 2: Full Sierpinski Dataset Generation")
             print("This will generate 65,536 transitions and may take several hours...")
@@ -719,23 +762,23 @@ def main():
                 print("Cancelled.")
                 return 0
             
-            results_matrix = run_full_sierpinski_generation(use_40_run=False)
+            results_matrix = run_full_sierpinski_generation(use_40_run=False, distribution_type=distribution_type)
             print(f"✅ Phase 2 Complete! Results shape: {results_matrix.shape}")
             return 0
             
-        elif len(sys.argv) > 1 and sys.argv[1].startswith("--run"):
+        elif len(remaining_args) > 0 and remaining_args[0].startswith("--run"):
 
             # Parse number of runs: --run=N or --run N
             num_runs = 40  # default
-            if "=" in sys.argv[1]:
+            if "=" in remaining_args[0]:
                 try:
-                    num_runs = int(sys.argv[1].split("=")[1])
+                    num_runs = int(remaining_args[0].split("=")[1])
                 except ValueError:
                     print("❌ Invalid run count format. Use --run=N where N is a number")
                     return 1
-            elif len(sys.argv) > 2:
+            elif len(remaining_args) > 1:
                 try:
-                    num_runs = int(sys.argv[2])
+                    num_runs = int(remaining_args[1])
                 except ValueError:
                     print("❌ Invalid run count. Use --run N where N is a number")
                     return 1
@@ -755,16 +798,16 @@ def main():
                 print("Cancelled.")
                 return 0
             
-            results_matrix = run_full_sierpinski_generation(use_40_run=True, num_runs=num_runs)
+            results_matrix = run_full_sierpinski_generation(use_40_run=True, num_runs=num_runs, distribution_type=distribution_type)
             print(f"✅ Phase 2 {num_runs}-Run Complete! Results shape: {results_matrix.shape}")
             print("🔍 Run visualize_sierpinski.py to analyze checkerboard patterns")
             return 0
         
-        elif len(sys.argv) > 1 and sys.argv[1] == "--test-batch":
+        elif len(remaining_args) > 0 and remaining_args[0] == "--test-batch":
 
             print("🧪 Testing batch processing with small subset...")
             
-            tester = SierpinskiTester()
+            tester = SierpinskiTester(distribution_type[2:])  # Remove -- prefix
             processor = SierpinskiBatchProcessor(tester)
             
 
@@ -783,20 +826,20 @@ def main():
             
             return 0
             
-        elif len(sys.argv) > 1 and sys.argv[1] == "--test-multi":
+        elif len(remaining_args) > 0 and remaining_args[0] == "--test-multi":
 
             # Parse number of runs for testing (default 5 for quick test)
             test_runs = 5
-            if len(sys.argv) > 2:
+            if len(remaining_args) > 1:
                 try:
-                    test_runs = int(sys.argv[2])
+                    test_runs = int(remaining_args[1])
                 except ValueError:
                     print("❌ Invalid run count for testing. Use --test-multi N")
                     return 1
             
             print(f"🧪 Testing {test_runs}-run mode with small subset...")
             
-            tester = SierpinskiTester()
+            tester = SierpinskiTester(distribution_type[2:])  # Remove -- prefix
             processor = SierpinskiBatchProcessor(tester)
             
 
@@ -818,14 +861,11 @@ def main():
         else:
 
             print("📋 Running Phase 1 validation tests...")
-            print("Use --full for complete dataset generation")
-            print("Use --run=N or --run N for N-run noise reduction approach")
-            print("Use --test-batch for batch processing test")
-            print("Use --test-multi N for testing multi-run mode")
+            print_usage()
             print()
             
 
-            tester = SierpinskiTester()
+            tester = SierpinskiTester(distribution_type[2:])  # Remove -- prefix
             
 
             if not tester.test_basic_functionality():
@@ -839,7 +879,7 @@ def main():
             
             print()
             print("✅ Phase 1 validation completed successfully!")
-            print("💡 Ready for Phase 2! Run with --full or --run=N to generate complete dataset")
+            print("💡 Ready for Phase 2! Add a command to generate complete dataset")
             return 0
         
     except Exception as e:

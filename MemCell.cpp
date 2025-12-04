@@ -54,25 +54,51 @@ static void SetRandomSeed(unsigned int seed) {
 	randomSeedSet = true;
 }
 
-/* Function to sample from truncated normal distribution */
+/* Function to sample from normal distribution */
 static int SampleTruncatedNormal(double mean, double stddev, int minVal, int maxVal) {
 	std::normal_distribution<double> distribution(mean, stddev);
-	int sample;
-	int attempts = 0;
-	const int maxAttempts = 100; /* Prevent infinite loops */
-
-	sample = (int)round(distribution(gen));
 	
-	/*do {
-		sample = (int)round(distribution(gen));
-		attempts++;
-		if (attempts >= maxAttempts) {
-			Fallback to bounds if distribution is too extreme
-			sample = (sample < minVal) ? minVal : sample;
-			sample = (sample > maxVal) ? maxVal : sample;
-			break;
-		}
-	} while (sample < minVal || sample > maxVal); */
+	// Sample directly from normal distribution
+	double normalSample = distribution(gen);
+	int sample = (int)round(normalSample);
+	
+	// Ensure non-negative pulse count (physical constraint)
+	if (sample < 1) {
+		sample = 1;
+	}
+	
+	return sample;
+}
+
+/* Function to sample from negative binomial distribution */
+static int SampleNegativeBinomial(double successProbability, int targetSuccesses, int minVal, int maxVal) {
+	std::negative_binomial_distribution<int> distribution(targetSuccesses, successProbability);
+	
+	// Sample directly from negative binomial distribution
+	int sample = distribution(gen);
+	// Negative binomial returns number of failures, add target successes for total trials
+	sample += targetSuccesses;
+	
+	// Ensure non-negative pulse count (physical constraint)
+	if (sample < 1) {
+		sample = 1;
+	}
+	
+	return sample;
+}
+
+/* Function to sample from gamma distribution (Tyler's fitted parameters) */
+static int SampleGamma(double k, double theta, double loc, int minVal, int maxVal) {
+	std::gamma_distribution<double> distribution(k, theta);
+	
+	// Sample directly from gamma distribution and add location offset
+	double gammaSample = distribution(gen) + loc;
+	int sample = (int)round(gammaSample);
+	
+	// Ensure non-negative pulse count (physical constraint)
+	if (sample < 1) {
+		sample = 1;
+	}
 	
 	return sample;
 }
@@ -105,6 +131,9 @@ MemCell::MemCell() {
 
 	/* Stochastic parameters - initialize to deterministic defaults */
 	stochasticEnabled           = false;
+	distributionType            = NORMAL_DISTRIBUTION;  /* Default to normal distribution */
+	
+	/* Normal distribution parameters */
 	setPulseCountMean          = 1.0;
 	setPulseCountStdDev        = 0.0;
 	setPulseCountMin           = 1;
@@ -117,6 +146,30 @@ MemCell::MemCell() {
 	redundantPulseCountStdDev  = 0.0;
 	redundantPulseCountMin     = 1;
 	redundantPulseCountMax     = 1;
+	
+	/* Negative binomial distribution parameters - ReRAM-friendly defaults */
+	setSuccessProbability      = 0.7;   /* 70% chance of switching per pulse */
+	setTargetSuccesses         = 1;     /* Need 1 successful switch */
+	resetSuccessProbability    = 0.6;   /* RESET typically harder than SET */
+	resetTargetSuccesses       = 1;     /* Need 1 successful switch */
+	redundantSuccessProbability = 0.8;  /* Redundant ops easier (already in desired state) */
+	redundantTargetSuccesses   = 1;     /* Need 1 successful switch */
+	
+	/* Gamma distribution parameters - matches exact_gamma_simulation.py */
+	/* SET: Distribution: gamma_k=0.013_mu=0.13 */
+	setGammaK                  = 0.13;
+	setGammaTheta              = 423.07692307692304;
+	setGammaLoc                = 495.0;
+	
+	/* RESET: Distribution: gamma_k=0.013_mu=0.11 */
+	resetGammaK                = 0.13;
+	resetGammaTheta            = 625.0;
+	resetGammaLoc              = 568.75;
+	
+	/* Redundant operation gamma parameters - unused since normal dist used */
+	redundantGammaK            = 0.13;
+	redundantGammaTheta        = 423.07692307692304;
+	redundantGammaLoc          = 495.0;
 
 	/* Optional */
 	stitching         = 0;
@@ -541,6 +594,84 @@ void MemCell::ReadCellFromFile(const string & inputFile)
 			sscanf(line, "-RedundantPulseCountMax: %d", &redundantPulseCountMax);
 			continue;
 		}
+
+		/* Distribution type selection */
+		if (!strncmp("-DistributionType", line, strlen("-DistributionType"))) {
+			char distributionTypeStr[100];
+			sscanf(line, "-DistributionType: %s", distributionTypeStr);
+			if (!strncmp(distributionTypeStr, "NORMAL", 6)) {
+				distributionType = NORMAL_DISTRIBUTION;
+			} else if (!strncmp(distributionTypeStr, "NEGATIVE_BINOMIAL", 17)) {
+				distributionType = NEGATIVE_BINOMIAL_DISTRIBUTION;
+			} else if (!strncmp(distributionTypeStr, "GAMMA", 5)) {
+				distributionType = GAMMA_DISTRIBUTION;
+			}
+			continue;
+		}
+
+		/* Negative Binomial distribution parameters */
+		if (!strncmp("-SetSuccessProbability", line, strlen("-SetSuccessProbability"))) {
+			sscanf(line, "-SetSuccessProbability: %lf", &setSuccessProbability);
+			continue;
+		}
+		if (!strncmp("-SetTargetSuccesses", line, strlen("-SetTargetSuccesses"))) {
+			sscanf(line, "-SetTargetSuccesses: %d", &setTargetSuccesses);
+			continue;
+		}
+		if (!strncmp("-ResetSuccessProbability", line, strlen("-ResetSuccessProbability"))) {
+			sscanf(line, "-ResetSuccessProbability: %lf", &resetSuccessProbability);
+			continue;
+		}
+		if (!strncmp("-ResetTargetSuccesses", line, strlen("-ResetTargetSuccesses"))) {
+			sscanf(line, "-ResetTargetSuccesses: %d", &resetTargetSuccesses);
+			continue;
+		}
+		if (!strncmp("-RedundantSuccessProbability", line, strlen("-RedundantSuccessProbability"))) {
+			sscanf(line, "-RedundantSuccessProbability: %lf", &redundantSuccessProbability);
+			continue;
+		}
+		if (!strncmp("-RedundantTargetSuccesses", line, strlen("-RedundantTargetSuccesses"))) {
+			sscanf(line, "-RedundantTargetSuccesses: %d", &redundantTargetSuccesses);
+			continue;
+		}
+
+		/* Gamma distribution parameters */
+		if (!strncmp("-SetGammaK", line, strlen("-SetGammaK"))) {
+			sscanf(line, "-SetGammaK: %lf", &setGammaK);
+			continue;
+		}
+		if (!strncmp("-SetGammaTheta", line, strlen("-SetGammaTheta"))) {
+			sscanf(line, "-SetGammaTheta: %lf", &setGammaTheta);
+			continue;
+		}
+		if (!strncmp("-SetGammaLoc", line, strlen("-SetGammaLoc"))) {
+			sscanf(line, "-SetGammaLoc: %lf", &setGammaLoc);
+			continue;
+		}
+		if (!strncmp("-ResetGammaK", line, strlen("-ResetGammaK"))) {
+			sscanf(line, "-ResetGammaK: %lf", &resetGammaK);
+			continue;
+		}
+		if (!strncmp("-ResetGammaTheta", line, strlen("-ResetGammaTheta"))) {
+			sscanf(line, "-ResetGammaTheta: %lf", &resetGammaTheta);
+			continue;
+		}
+		if (!strncmp("-ResetGammaLoc", line, strlen("-ResetGammaLoc"))) {
+			sscanf(line, "-ResetGammaLoc: %lf", &resetGammaLoc);
+			continue;
+		}
+		if (!strncmp("-RedundantGammaK", line, strlen("-RedundantGammaK"))) {
+			sscanf(line, "-RedundantGammaK: %lf", &redundantGammaK);
+			continue;
+		}
+		if (!strncmp("-RedundantGammaTheta", line, strlen("-RedundantGammaTheta"))) {
+			sscanf(line, "-RedundantGammaTheta: %lf", &redundantGammaTheta);
+			continue;
+		}
+		if (!strncmp("-RedundantGammaLoc", line, strlen("-RedundantGammaLoc"))) {
+			sscanf(line, "-RedundantGammaLoc: %lf", &redundantGammaLoc);
+			continue;
+		}
 	}
 
 	fclose(fp);
@@ -836,22 +967,43 @@ int MemCell::SamplePulseCount(TransitionType transitionType) {
 		return 1;
 	}
 	
-	/* Sample from appropriate distribution based on transition type */
+	/* Sample from appropriate distribution based on transition type and distribution mode */
 	int pulseCount;
+	
 	switch (transitionType) {
 		case SET:
-			pulseCount = SampleTruncatedNormal(setPulseCountMean, setPulseCountStdDev, 
-											   setPulseCountMin, setPulseCountMax);
+			if (distributionType == NORMAL_DISTRIBUTION) {
+				pulseCount = SampleTruncatedNormal(setPulseCountMean, setPulseCountStdDev, 
+												   setPulseCountMin, setPulseCountMax);
+			} else if (distributionType == NEGATIVE_BINOMIAL_DISTRIBUTION) {
+				pulseCount = SampleNegativeBinomial(setSuccessProbability, setTargetSuccesses,
+													setPulseCountMin, setPulseCountMax);
+			} else { // GAMMA_DISTRIBUTION
+				pulseCount = SampleGamma(setGammaK, setGammaTheta, setGammaLoc,
+										 setPulseCountMin, setPulseCountMax);
+			}
 			break;
+			
 		case RESET:
-			pulseCount = SampleTruncatedNormal(resetPulseCountMean, resetPulseCountStdDev,
-											   resetPulseCountMin, resetPulseCountMax);
+			if (distributionType == NORMAL_DISTRIBUTION) {
+				pulseCount = SampleTruncatedNormal(resetPulseCountMean, resetPulseCountStdDev,
+												   resetPulseCountMin, resetPulseCountMax);
+			} else if (distributionType == NEGATIVE_BINOMIAL_DISTRIBUTION) {
+				pulseCount = SampleNegativeBinomial(resetSuccessProbability, resetTargetSuccesses,
+													resetPulseCountMin, resetPulseCountMax);
+			} else { // GAMMA_DISTRIBUTION
+				pulseCount = SampleGamma(resetGammaK, resetGammaTheta, resetGammaLoc,
+										 resetPulseCountMin, resetPulseCountMax);
+			}
 			break;
+			
 		case REDUNDANT_SET:
 		case REDUNDANT_RESET:
+			// Always use normal distribution for redundant operations (as in original rram.cell)
 			pulseCount = SampleTruncatedNormal(redundantPulseCountMean, redundantPulseCountStdDev,
 											   redundantPulseCountMin, redundantPulseCountMax);
 			break;
+			
 		default:
 			pulseCount = 1;
 			break;

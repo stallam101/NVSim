@@ -101,6 +101,14 @@ public:
 	/* Stochastic pulse count distribution parameters */
 	bool stochasticEnabled;     /* Enable stochastic multi-pulse modeling */
 	
+	/* Distribution type selection */
+	enum DistributionType {
+		NORMAL_DISTRIBUTION,
+		NEGATIVE_BINOMIAL_DISTRIBUTION,
+		GAMMA_DISTRIBUTION
+	};
+	DistributionType distributionType;  /* Current distribution type */
+	
 	/* SET transition (0→1) distribution parameters */
 	double setPulseCountMean;
 	double setPulseCountStdDev;
@@ -118,6 +126,35 @@ public:
 	double redundantPulseCountStdDev;
 	int redundantPulseCountMin;
 	int redundantPulseCountMax;
+	
+	/* Negative Binomial distribution parameters */
+	/* SET transition negative binomial parameters */
+	double setSuccessProbability;    /* Probability of success per pulse (0.0-1.0) */
+	int setTargetSuccesses;          /* Number of successes needed (usually 1) */
+	
+	/* RESET transition negative binomial parameters */
+	double resetSuccessProbability;  /* Probability of success per pulse (0.0-1.0) */
+	int resetTargetSuccesses;        /* Number of successes needed (usually 1) */
+	
+	/* Redundant operation negative binomial parameters */
+	double redundantSuccessProbability; /* Probability of success per pulse (0.0-1.0) */
+	int redundantTargetSuccesses;       /* Number of successes needed (usually 1) */
+	
+	/* Gamma distribution parameters (from Tyler's fitting) */
+	/* SET transition gamma parameters */
+	double setGammaK;           /* Shape parameter (k) */
+	double setGammaTheta;       /* Scale parameter (theta) */
+	double setGammaLoc;         /* Location parameter (loc) */
+	
+	/* RESET transition gamma parameters */
+	double resetGammaK;         /* Shape parameter (k) */
+	double resetGammaTheta;     /* Scale parameter (theta) */
+	double resetGammaLoc;       /* Location parameter (loc) */
+	
+	/* Redundant operation gamma parameters */
+	double redundantGammaK;     /* Shape parameter (k) */
+	double redundantGammaTheta; /* Scale parameter (theta) */
+	double redundantGammaLoc;   /* Location parameter (loc) */
 
 	/* Optional properties */
 	int stitching;			/* If non-zero, add stitching overhead for every x cells */

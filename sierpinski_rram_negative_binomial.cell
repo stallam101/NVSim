@@ -1,0 +1,78 @@
+# RRAM Cell Parameters for Sierpinski Gasket Testing - NEGATIVE BINOMIAL VERSION
+# This configuration uses negative binomial distribution to create right-skewed
+# timing distributions for revealing Hamming weight checkerboard patterns
+
+-MemCellType: memristor
+
+-CellArea (F^2): 4
+-CellAspectRatio: 1
+
+# Resistance values for RRAM states (same as original)
+-ResistanceOnAtSetVoltage (ohm): 100000
+-ResistanceOffAtSetVoltage (ohm): 10000000
+-ResistanceOnAtResetVoltage (ohm): 100000
+-ResistanceOffAtResetVoltage (ohm): 10000000
+-ResistanceOnAtReadVoltage (ohm): 1000000
+-ResistanceOffAtReadVoltage (ohm): 10000000
+-ResistanceOnAtHalfResetVoltage (ohm): 500000
+
+# Capacitance values
+-CapacitanceOn (F): 1e-16
+-CapacitanceOff (F): 1e-16
+
+# Read operation parameters
+-ReadMode: current
+-ReadVoltage (V): 0.4
+-ReadPower (uW): 0.16
+
+# RESET operation parameters (1→0: LRS→HRS, slower for RRAM)
+-ResetMode: voltage
+-ResetVoltage (V): 2.0
+-ResetPulse (ns): 200
+-ResetEnergy (pJ): 0.6
+
+# SET operation parameters (0→1: HRS→LRS, faster for RRAM)
+-SetMode: voltage
+-SetVoltage (V): 2.0
+-SetPulse (ns): 200
+-SetEnergy (pJ): 0.6
+
+-AccessType: None
+-ReadFloating: false
+
+#==========================================
+# NEGATIVE BINOMIAL Distribution for Right-Skewed Behavior
+#==========================================
+-StochasticEnabled: true
+
+# CRITICAL: Switch to negative binomial distribution
+-DistributionType: NEGATIVE_BINOMIAL
+
+# Negative Binomial Parameters for right-skewed ReRAM switching behavior
+# Lower success probability = more right skew (longer tail to right)
+
+# SET operation (0→1): High success rate for strong right skew
+-SetSuccessProbability: 0.4
+-SetTargetSuccesses: 1
+-SetPulseCountMin: 1
+-SetPulseCountMax: 1000
+
+# RESET operation (1→0): Slightly harder than SET
+-ResetSuccessProbability: 0.3
+-ResetTargetSuccesses: 1
+-ResetPulseCountMin: 1
+-ResetPulseCountMax: 1000
+
+# Redundant operations: Very easy (cell already in correct state)
+-RedundantSuccessProbability: 0.8
+-RedundantTargetSuccesses: 1
+-RedundantPulseCountMin: 0
+-RedundantPulseCountMax: 10
+
+# Backup normal distribution parameters (for comparison/fallback)
+-SetPulseCountMean: 640
+-SetPulseCountStdDev: 100
+-ResetPulseCountMean: 600
+-ResetPulseCountStdDev: 100
+-RedundantPulseCountMean: 0
+-RedundantPulseCountStdDev: 0

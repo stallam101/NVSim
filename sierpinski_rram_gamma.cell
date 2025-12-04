@@ -1,0 +1,74 @@
+# RRAM Cell Parameters for Sierpinski Gasket Testing - GAMMA DISTRIBUTION VERSION
+# This configuration uses gamma distribution with Tyler's fitted parameters to create
+# right-skewed timing distributions for revealing Hamming weight checkerboard patterns
+
+-MemCellType: memristor
+
+-CellArea (F^2): 4
+-CellAspectRatio: 1
+
+# Resistance values for RRAM states (same as original)
+-ResistanceOnAtSetVoltage (ohm): 100000
+-ResistanceOffAtSetVoltage (ohm): 10000000
+-ResistanceOnAtResetVoltage (ohm): 100000
+-ResistanceOffAtResetVoltage (ohm): 10000000
+-ResistanceOnAtReadVoltage (ohm): 1000000
+-ResistanceOffAtReadVoltage (ohm): 10000000
+-ResistanceOnAtHalfResetVoltage (ohm): 500000
+
+# Capacitance values
+-CapacitanceOn (F): 1e-16
+-CapacitanceOff (F): 1e-16
+
+# Read operation parameters
+-ReadMode: current
+-ReadVoltage (V): 0.4
+-ReadPower (uW): 0.16
+
+# RESET operation parameters (1→0: LRS→HRS, slower for RRAM)
+-ResetMode: voltage
+-ResetVoltage (V): 2.0
+-ResetPulse (ns): 200
+-ResetEnergy (pJ): 0.6
+
+# SET operation parameters (0→1: HRS→LRS, faster for RRAM)
+-SetMode: voltage
+-SetVoltage (V): 2.0
+-SetPulse (ns): 200
+-SetEnergy (pJ): 0.6
+
+-AccessType: None
+-ReadFloating: false
+
+#==========================================
+# GAMMA Distribution with Tyler's Fitted Parameters
+#==========================================
+-StochasticEnabled: true
+
+# CRITICAL: Switch to gamma distribution
+-DistributionType: GAMMA
+
+# Gamma Distribution Parameters from Tyler's fitting work
+# These create right-skewed ReRAM switching behavior (time analog to Poisson)
+
+# SET operation (0→1): Distribution: gamma_k=0.013_mu=0.13
+# Matches exact_gamma_simulation.py parameters exactly
+-SetGammaK: 0.13
+-SetGammaTheta: 423.07692307692304
+-SetGammaLoc: 495.0
+-SetPulseCountMin: 1
+-SetPulseCountMax: 1000
+
+# RESET operation (1→0): Distribution: gamma_k=0.013_mu=0.11
+# Matches exact_gamma_simulation.py parameters exactly
+-ResetGammaK: 0.13
+-ResetGammaTheta: 625.0
+-ResetGammaLoc: 568.75
+-ResetPulseCountMin: 1
+-ResetPulseCountMax: 1000
+
+# Redundant operations: Use Gaussian distribution (same as sierpinski_rram.cell)
+-RedundantPulseCountMean: 0
+-RedundantPulseCountStdDev: 0
+-RedundantPulseCountMin: 0
+-RedundantPulseCountMax: 0
