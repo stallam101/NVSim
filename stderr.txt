@@ -1,0 +1,3 @@
+INFO: SierpinskiTester initialized successfully
+INFO: P matrix shape: (16, 5)
+INFO: b vector shape: (5,)

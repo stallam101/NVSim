@@ -239,13 +239,31 @@ python sierpinski_4_variants.py
 - **Test Batch**: ~30 seconds for validation
 - **Memory Usage**: ~2GB for complete dataset
 
+## Important Configuration Note
+
+### Distribution Type Override Required
+
+**WARNING**: Due to a configuration parsing issue, you must manually set the distribution type in the source code to match your intended analysis:
+
+1. **Edit** `src/cpp/MemCell.cpp` around line 121
+2. **Change** the constructor default:
+   ```cpp
+   distributionType = GAMMA_DISTRIBUTION;     // For gamma analysis
+   distributionType = NORMAL_DISTRIBUTION;   // For normal analysis  
+   distributionType = NEGATIVE_BINOMIAL_DISTRIBUTION;  // For negative binomial analysis
+   ```
+3. **Recompile** with `make clean && make` after each change
+
+This manual override is required because the config file parsing for `-DistributionType` is not being applied correctly, and the constructor default controls the actual distribution used regardless of the config file settings.
+
 ## Troubleshooting
 
 ### Common Issues
 1. **Module Import Errors**: Ensure virtual environment is activated
 2. **Compilation Errors**: Run `make clean && make` after parameter changes
 3. **Wrong Distribution**: Check that latest dataset matches intended distribution type
-4. **Left Skew Persistence**: This is expected due to MAX→ADD→MIN mathematical pipeline
+4. **Distribution Not Changing**: Manually set `distributionType` in MemCell.cpp constructor (see above)
+5. **Left Skew Persistence**: This is expected due to MAX→ADD→MIN mathematical pipeline
 
 ### Debug Commands
 ```bash

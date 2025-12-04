@@ -42,6 +42,7 @@
 # Stochastic Parameters for 3-Class Timing
 #==========================================
 -StochasticEnabled: true
+-DistributionType: NORMAL
 
 -SetPulseCountMean: 640
 -SetPulseCountStdDev: 100

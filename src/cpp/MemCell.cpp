@@ -118,7 +118,7 @@ MemCell::MemCell() {
 	setEnergy           = 0;
 
 	stochasticEnabled           = false;
-	distributionType            = NORMAL_DISTRIBUTION;
+	distributionType            = GAMMA_DISTRIBUTION;
 	
 	setPulseCountMean          = 1.0;
 	setPulseCountStdDev        = 0.0;
@@ -979,9 +979,8 @@ int MemCell::SamplePulseCount(TransitionType transitionType) {
 			
 		case REDUNDANT_SET:
 		case REDUNDANT_RESET:
-			// Always use normal distribution for redundant operations (as in original rram.cell)
-			pulseCount = SampleTruncatedNormal(redundantPulseCountMean, redundantPulseCountStdDev,
-											   redundantPulseCountMin, redundantPulseCountMax);
+			// Redundant operations now return 1 pulse since base latency already handles them
+			pulseCount = 1;
 			break;
 			
 		default:

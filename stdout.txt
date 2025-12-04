@@ -1,0 +1,22 @@
+Sierpinski Gasket NVSim Tester
+==================================================
+Distribution Type: Gamma
+Testing batch processing with small subset...
+Testing 16 transitions...
+Batch test complete: 16 results
+  msg 0→0: 204.000ns
+  msg 0→1: 220204.000ns
+  msg 0→2: 103204.000ns
+  msg 0→3: 183004.000ns
+  msg 1→0: 162204.000ns
+  msg 1→1: 404.000ns
+  msg 1→2: 229804.000ns
+  msg 1→3: 213004.000ns
+  msg 2→0: 220604.000ns
+  msg 2→1: 286404.000ns
+  msg 2→2: 404.000ns
+  msg 2→3: 277004.000ns
+  msg 3→0: 113804.000ns
+  msg 3→1: 216004.000ns
+  msg 3→2: 212804.000ns
+  msg 3→3: 404.000ns
