@@ -6,15 +6,32 @@ This framework enables statistical analysis of ReRAM write time distributions us
 
 The framework implements a two-phase write architecture with configurable stochastic timing distributions to study how different pulse count distributions affect write time characteristics and their ability to reveal underlying data patterns.
 
+## Project Structure
+
+```
+NVSim/
+├── src/
+│   ├── cpp/           # C++ source files (NVSim simulator)
+│   └── py/            # Python analysis scripts
+├── configs/           # Configuration files (.cfg, .cell)
+├── measurements/      # Data output directory
+│   ├── sierpinski_data/
+│   └── sierpinski_4_variants/
+├── plots/             # Generated plots and visualizations
+├── build/             # Compiled binaries and build artifacts
+├── work/              # Temporary working files
+└── venv/              # Python virtual environment
+```
+
 ## Core Scripts
 
-### 1. `sierpinski_test.py` - Main Testing Framework
+### 1. Main Testing Framework
 
 The primary script for generating timing datasets using different statistical distributions.
 
 #### Usage Syntax
 ```bash
-python sierpinski_test.py <DISTRIBUTION_TYPE> [COMMAND] [OPTIONS]
+python run_sierpinski.py <DISTRIBUTION_TYPE> [COMMAND] [OPTIONS]
 ```
 
 #### Distribution Types
@@ -31,43 +48,43 @@ python sierpinski_test.py <DISTRIBUTION_TYPE> [COMMAND] [OPTIONS]
 #### Examples
 ```bash
 # Quick validation tests
-python sierpinski_test.py --normal --test-batch
-python sierpinski_test.py --gamma --test-multi 5
+python run_sierpinski.py --normal --test-batch
+python run_sierpinski.py --gamma --test-multi 5
 
 # Full dataset generation  
-python sierpinski_test.py --normal --full
-python sierpinski_test.py --gamma --run=40
+python run_sierpinski.py --normal --full
+python run_sierpinski.py --gamma --run=40
 
 # Generate right-skewed timing with noise reduction
-python sierpinski_test.py --gamma --run=40
+python run_sierpinski.py --gamma --run=40
 ```
 
-### 2. `sierpinski_4_variants.py` - Multi-Distribution Comparison
+### 2. Multi-Distribution Comparison
 
 Generates datasets for multiple distribution types simultaneously for comparative analysis.
 
 #### Usage
 ```bash
-python sierpinski_4_variants.py
+python -m src.py.sierpinski_4_variants
 ```
 
 #### Features
 - Tests 4 distribution variants in parallel
 - Automatic comparison plotting
-- Stores results in `sierpinski_4_variants/` directory
+- Stores results in `measurements/sierpinski_4_variants/` directory
 
-### 3. `analyze_nvsim_clusters.py` - Distribution Analysis
+### 3. Distribution Analysis
 
 Analyzes generated timing datasets to create write time distribution histograms and statistical analysis.
 
 #### Usage
 ```bash
-python analyze_nvsim_clusters.py
+python run_analysis.py
 ```
 
 #### Features
-- Loads latest dataset from `sierpinski_data/`
-- Generates write time distribution histograms
+- **Automatically loads latest dataset** from `measurements/sierpinski_data/`
+- Generates write time distribution histograms in `plots/`
 - Creates timing analysis plots
 - Statistical clustering analysis
 
