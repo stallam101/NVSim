@@ -1,0 +1,17 @@
+{
+  "total_transitions": 65536,
+  "successful_transitions": 65536,
+  "success_rate": 1.0,
+  "timing_stats": {
+    "min_latency": 204.0,
+    "max_latency": 395404.0,
+    "mean_latency": 273609.64880371094,
+    "std_latency": 39559.41109337807,
+    "median_latency": 279404.0
+  },
+  "pattern_analysis": {
+    "unique_values": 1215,
+    "zero_latency_count": 0,
+    "missing_data_count": 0
+  }
+}

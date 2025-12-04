@@ -8,9 +8,9 @@ import json
 from datetime import datetime
 
 def load_latest_dataset():
-    data_dir = Path("sierpinski_data")
+    data_dir = Path("measurements/sierpinski_data")
     if not data_dir.exists():
-        raise FileNotFoundError("No sierpinski_data directory found")
+        raise FileNotFoundError("No measurements/sierpinski_data directory found")
     
 
     run_dirs = [d for d in data_dir.iterdir() if d.is_dir() and d.name.startswith("run_")]

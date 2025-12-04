@@ -1,0 +1,11 @@
+{
+  "generation_time": 1764873536.309616,
+  "total_transitions": 65536,
+  "nvsim_version": "Phase 3 Stochastic",
+  "mode": "single-run",
+  "ecc_parameters": {
+    "P_matrix_shape": "16x5",
+    "b_vector_shape": "5x1",
+    "codeword_bits": 21
+  }
+}

@@ -88,6 +88,21 @@ python run_analysis.py
 - Creates timing analysis plots
 - Statistical clustering analysis
 
+### 4. Sierpinski Pattern Visualization
+
+Visualizes the sierpinski gasket patterns in timing data to reveal Hamming weight checkerboard structures.
+
+#### Usage
+```bash
+python run_visualize.py
+```
+
+#### Features
+- **Loads latest timing dataset** from `measurements/sierpinski_data/`
+- Generates sierpinski triangle visualizations in `plots/`
+- Reveals ECC-derived codeword transition patterns
+- Side-channel timing analysis visualization
+
 ## Distribution Configuration
 
 ### Template Configuration Files
